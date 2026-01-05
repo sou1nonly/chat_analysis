@@ -1,0 +1,24 @@
+{
+    "records": [
+        {
+            "name": "mlc-chat-config.json",
+            "size": 0
+        },
+        {
+            "name": "params_shard_0.bin",
+            "size": 68067328
+        },
+        {
+            "name": "params_shard_1.bin",
+            "size": 33234176
+        },
+        {
+            "name": "tokenizer.json",
+            "size": 0
+        },
+        {
+            "name": "tokenizer_config.json",
+            "size": 7308
+        }
+    ]
+}
