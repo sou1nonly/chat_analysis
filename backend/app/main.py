@@ -19,12 +19,12 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup: Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables initialized")
+    print("[OK] Database tables initialized")
     
     yield
     
     # Shutdown
-    print("👋 Shutting down Orbit Backend")
+    print("[INFO] Shutting down Orbit Backend")
 
 
 app = FastAPI(

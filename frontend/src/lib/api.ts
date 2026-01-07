@@ -196,6 +196,48 @@ class OrbitAPI {
     }
 
     /**
+     * Get deep hierarchical insights (weekly, monthly, yearly summaries)
+     */
+    async getDeepInsights(uploadId: number): Promise<{
+        status: string;
+        insights: {
+            participants: string[];
+            total_messages: number;
+            date_range: { start: string; end: string };
+            yearly: Array<{
+                year: number;
+                messages: number;
+                sentiment: number;
+                evolution: string;
+                patterns: string;
+                highlights: string[];
+            }>;
+            monthly: Array<{
+                month: string;
+                messages: number;
+                sentiment: number;
+                trend: string;
+                activity: string;
+                topics: string[];
+                narrative: string;
+            }>;
+            weekly: Array<{
+                week: string;
+                messages: number;
+                sentiment: number;
+                topics: string[];
+                narrative: string;
+            }>;
+        } | null;
+    }> {
+        const response = await fetch(`${API_BASE}/api/v1/ai/deep-insights/${uploadId}`);
+        if (!response.ok) {
+            throw new Error('Failed to get deep insights');
+        }
+        return response.json();
+    }
+
+    /**
      * Health check
      */
     async health(): Promise<{ status: string }> {

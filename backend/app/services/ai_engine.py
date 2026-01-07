@@ -15,7 +15,7 @@ try:
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
-    print("⚠️ ollama package not installed.")
+    print("[WARN] ollama package not installed.")
 
 from app.services.text_optimizer import TextOptimizer
 
@@ -120,7 +120,7 @@ class AIEngine:
     def load_model(self) -> bool:
         """Check if Ollama is running and model is available."""
         if not OLLAMA_AVAILABLE:
-            print("⚠️ Using mock AI engine (ollama not available)")
+            print("[WARN] Using mock AI engine (ollama not available)")
             self._ready = False
             return True
         
@@ -128,16 +128,16 @@ class AIEngine:
             models = ollama.list()
             model_list = models.models if hasattr(models, 'models') else models.get('models', [])
             model_names = [m.model if hasattr(m, 'model') else m.get('model', '') for m in model_list]
-            print(f"✅ Ollama connected. Models: {model_names}")
+            print(f"[OK] Ollama connected. Models: {model_names}")
             
             if not any(self._model_name in name for name in model_names):
-                print(f"📥 Pulling model {self._model_name}...")
+                print(f"[DOWNLOAD] Pulling model {self._model_name}...")
                 ollama.pull(self._model_name)
             
             self._ready = True
             return True
         except Exception as e:
-            print(f"⚠️ Ollama not available: {e}")
+            print(f"[WARN] Ollama not available: {e}")
             self._ready = False
             return False
     
@@ -222,22 +222,33 @@ class AIEngine:
         """
         Run full analysis across all 4 categories.
         
-        Handles 50k+ messages with stratified sampling.
-        Uses 15000 chars (~4k tokens) and 500 message samples.
+        Uses hierarchical summarization (Week→Month→Year) for temporal awareness.
+        Much more efficient: ~2-3k tokens vs 15k with raw sampling.
         """
-        # LARGE context for comprehensive analysis
-        # 15000 chars (~4k tokens) and 500 messages with stratified sampling
-        optimizer = TextOptimizer(messages, max_context_chars=15000)
-        context, legend = optimizer.build_context(sample_size=500)
-        stats_summary = optimizer.get_stats_summary(stats)
+        # Use hierarchical summarizer for temporal-aware context
+        from app.services.hierarchical_summarizer import HierarchicalSummarizer
         
-        # Get actual participant names for prompts
-        participant_names = list(optimizer.participant_map.keys())
-        participants_str = ' and '.join(participant_names)
-        name_map = optimizer.participant_map  # {"John": "P1", "Jane": "P2"}
+        print("[PIPELINE] Starting hierarchical summarization...")
+        summarizer = HierarchicalSummarizer(messages)
+        context = summarizer.build_ai_context(include_recent_messages=15)
         
-        print(f"📊 Analyzing {len(messages)} messages for participants: {participants_str}")
-        print(f"📝 Context size: {len(context)} chars, {context.count(chr(10))} lines")
+        # Get participant names
+        participant_names = summarizer.participants
+        participants_str = ' and '.join(participant_names) if participant_names else "the participants"
+        
+        # Build simple stats summary
+        stats_summary = f"Total messages: {len(messages)}"
+        if stats:
+            stats_summary += f", Participants: {stats.get('participants', {})}"
+        
+        # Create name map for post-processing (in case model outputs P1/P2)
+        name_map = {}
+        for i, name in enumerate(participant_names, 1):
+            name_map[name] = f"P{i}"
+        
+        print(f"[STATS] Analyzing {len(messages)} messages for: {participants_str}")
+        print(f"[CONTEXT] Context size: {len(context)} chars (~{len(context)//4} tokens)")
+
         
         results = {}
         categories = [
@@ -248,7 +259,7 @@ class AIEngine:
         ]
         
         for i, (category, stage) in enumerate(categories):
-            print(f"🧠 [{i+1}/4] {stage}")
+            print(f"[AI] [{i+1}/4] {stage}")
             
             prompt_template = PROMPTS.get(category, "")
             prompt = prompt_template.format(

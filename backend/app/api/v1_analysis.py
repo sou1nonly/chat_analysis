@@ -194,3 +194,40 @@ async def search_messages(
         })
     
     return {"results": results[:50]}
+
+
+@router.get("/ai/deep-insights/{upload_id}")
+async def get_deep_insights(upload_id: int, db: Session = Depends(get_db)):
+    """
+    Get hierarchical timeline insights (weekly, monthly, yearly summaries).
+    Uses the new HierarchicalSummarizer for temporal analysis.
+    """
+    from app.services.hierarchical_summarizer import HierarchicalSummarizer
+    
+    # Get messages for this upload
+    messages = db.query(Message).filter(
+        Message.upload_id == upload_id
+    ).order_by(Message.timestamp).all()
+    
+    if not messages:
+        raise HTTPException(status_code=404, detail="No messages found")
+    
+    # Convert to dict format
+    message_dicts = [
+        {
+            "sender": m.sender,
+            "content": m.content,
+            "timestamp": m.timestamp.isoformat() if m.timestamp else ""
+        }
+        for m in messages
+    ]
+    
+    # Run hierarchical summarization
+    summarizer = HierarchicalSummarizer(message_dicts)
+    summarizer.run_pipeline()
+    
+    # Return structured data for frontend
+    return {
+        "status": "complete",
+        "insights": summarizer.get_insights_data()
+    }

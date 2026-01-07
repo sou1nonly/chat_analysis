@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Brain, MessageSquare, Heart, Users, BarChart3, Sparkles } from "lucide-react";
 import api from "@/lib/api";
+import InsightsDisplay from "./InsightsDisplay";
 
 // Individual insight card components
 function InsightCard({
@@ -46,14 +47,20 @@ function InsightCard({
     );
 }
 
-function InsightText({ label, value }: { label: string; value: string }) {
+function InsightText({ label, value }: { label: string; value: string | object }) {
+    // Safety: convert objects to string if AI returns structured data
+    const displayValue = typeof value === 'object' && value !== null
+        ? JSON.stringify(value, null, 2).replace(/[{}"]/g, '').trim()
+        : String(value || 'Waiting for analysis...');
+
     return (
         <div className="space-y-1">
             <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{label}</span>
-            <p className="text-sm text-zinc-300 leading-relaxed">{value}</p>
+            <p className="text-sm text-zinc-300 leading-relaxed">{displayValue}</p>
         </div>
     );
 }
+
 
 function ScoreBar({ label, score, color }: { label: string; score: number; color: string }) {
     return (
@@ -88,65 +95,135 @@ function FlagBadge({ type, text }: { type: 'red' | 'green'; text: string }) {
     );
 }
 
-// Honest loading overlay with indeterminate animation
+// Pipeline stages with checkpoints
+const PIPELINE_STAGES = [
+    { id: 'init', label: 'Initializing AI engine', duration: 2000 },
+    { id: 'preprocess', label: 'Preprocessing messages', duration: 3000 },
+    { id: 'weekly', label: 'Creating weekly summaries', duration: 4000 },
+    { id: 'monthly', label: 'Building monthly insights', duration: 3000 },
+    { id: 'yearly', label: 'Generating yearly overview', duration: 2000 },
+    { id: 'analyze', label: 'AI analyzing patterns', duration: 15000 },
+];
+
+// Detailed loading overlay with checkpoints
 function LoadingOverlay({ stage }: { stage: string }) {
+    const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+    const [currentStep, setCurrentStep] = useState(0);
+
+    // Simulate progress through stages
+    useEffect(() => {
+        let timeout: NodeJS.Timeout;
+
+        const advanceStep = () => {
+            if (currentStep < PIPELINE_STAGES.length) {
+                const currentStage = PIPELINE_STAGES[currentStep];
+                setCompletedSteps(prev => [...prev, currentStage.id]);
+                setCurrentStep(prev => prev + 1);
+
+                if (currentStep + 1 < PIPELINE_STAGES.length) {
+                    timeout = setTimeout(advanceStep, PIPELINE_STAGES[currentStep + 1].duration);
+                }
+            }
+        };
+
+        // Start first step after a short delay
+        timeout = setTimeout(advanceStep, PIPELINE_STAGES[0].duration);
+
+        return () => clearTimeout(timeout);
+    }, []);
+
     return (
-        <div className="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-md bg-black/50 rounded-2xl">
-            <div className="text-center space-y-5 px-8">
-                {/* Animated brain icon with pulse */}
-                <div className="relative">
+        <div className="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-md bg-black/60 rounded-2xl">
+            <div className="w-full max-w-md px-8 py-6">
+                {/* Header */}
+                <div className="flex items-center gap-4 mb-6">
                     <motion.div
                         animate={{
                             scale: [1, 1.1, 1],
-                            rotate: [0, 5, -5, 0]
                         }}
                         transition={{
                             duration: 2,
                             repeat: Infinity,
                             ease: "easeInOut"
                         }}
-                        className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/30"
+                        className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/30"
                     >
-                        <Brain className="w-10 h-10 text-white" />
+                        <Brain className="w-7 h-7 text-white" />
                     </motion.div>
-
-                    {/* Sparkles around the brain */}
-                    <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-0"
-                    >
-                        <Sparkles className="w-4 h-4 text-purple-400 absolute -top-1 -right-1" />
-                        <Sparkles className="w-3 h-3 text-pink-400 absolute -bottom-1 -left-1" />
-                    </motion.div>
-                </div>
-
-                {/* Indeterminate progress bar */}
-                <div className="w-72 mx-auto">
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                        <motion.div
-                            animate={{ x: ["-100%", "200%"] }}
-                            transition={{
-                                duration: 1.5,
-                                repeat: Infinity,
-                                ease: "easeInOut"
-                            }}
-                            className="h-full w-1/3 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full"
-                        />
+                    <div>
+                        <h3 className="text-lg font-bold text-white">Analyzing Your Chat</h3>
+                        <p className="text-sm text-zinc-400">Building relationship timeline...</p>
                     </div>
                 </div>
 
-                {/* Status text */}
-                <div className="space-y-1">
-                    <p className="text-base text-white font-medium">{stage}</p>
-                    <p className="text-xs text-zinc-400">
-                        This may take 30-60 seconds for large chats
-                    </p>
+                {/* Progress steps */}
+                <div className="space-y-3">
+                    {PIPELINE_STAGES.map((pipelineStage, index) => {
+                        const isCompleted = completedSteps.includes(pipelineStage.id);
+                        const isCurrent = index === currentStep && !isCompleted;
+
+                        return (
+                            <motion.div
+                                key={pipelineStage.id}
+                                initial={{ opacity: 0.4 }}
+                                animate={{
+                                    opacity: isCompleted || isCurrent ? 1 : 0.4,
+                                }}
+                                className="flex items-center gap-3"
+                            >
+                                {/* Checkbox */}
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted
+                                    ? 'bg-emerald-500 border-emerald-500'
+                                    : isCurrent
+                                        ? 'border-purple-500 bg-purple-500/20'
+                                        : 'border-zinc-600 bg-transparent'
+                                    }`}>
+                                    {isCompleted ? (
+                                        <motion.svg
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="w-4 h-4 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </motion.svg>
+                                    ) : isCurrent ? (
+                                        <motion.div
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                            className="w-3 h-3 border-2 border-purple-500 border-t-transparent rounded-full"
+                                        />
+                                    ) : null}
+                                </div>
+
+                                {/* Label */}
+                                <span className={`text-sm transition-colors duration-300 ${isCompleted
+                                    ? 'text-emerald-400'
+                                    : isCurrent
+                                        ? 'text-white font-medium'
+                                        : 'text-zinc-500'
+                                    }`}>
+                                    {pipelineStage.label}
+                                </span>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+
+                {/* Time estimate */}
+                <div className="mt-6 pt-4 border-t border-zinc-800">
+                    <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <span>Processing {stage.includes('history') ? 'chat history' : 'data'}...</span>
+                        <span>~30-60 seconds</span>
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
+
 
 export default function AIInsightsSection() {
     const {
@@ -163,6 +240,44 @@ export default function AIInsightsSection() {
         messages_analyzed?: number;
         total_messages?: number;
     } | null>(null);
+
+    // Deep insights for hierarchical timeline
+    const [deepInsights, setDeepInsights] = useState<{
+        participants: string[];
+        total_messages: number;
+        date_range: { start: string; end: string };
+        yearly: Array<{
+            year: number;
+            messages: number;
+            sentiment: number;
+            evolution: string;
+            patterns: string;
+            highlights: string[];
+        }>;
+        monthly: Array<{
+            month: string;
+            messages: number;
+            sentiment: number;
+            trend: string;
+            activity: string;
+            topics: string[];
+            narrative: string;
+        }>;
+        weekly: Array<{
+            week: string;
+            messages: number;
+            sentiment: number;
+            topics: string[];
+            narrative: string;
+        }>;
+    } | null>(null);
+    const [deepInsightsLoading, setDeepInsightsLoading] = useState(false);
+
+    // Clear deep insights when upload changes
+    useEffect(() => {
+        setDeepInsights(null);
+        setDeepInsightsLoading(false);
+    }, [uploadId]);
 
     // Trigger AI analysis when stats are ready
     useEffect(() => {
@@ -224,8 +339,32 @@ export default function AIInsightsSection() {
         runAnalysis();
     }, [uploadId, stats, aiInsights, aiStatus]);
 
+    // Fetch deep hierarchical insights when AI analysis completes
+    useEffect(() => {
+        if (!uploadId || !aiInsights || deepInsights || deepInsightsLoading) {
+            return;
+        }
+
+        const fetchDeepInsights = async () => {
+            setDeepInsightsLoading(true);
+            try {
+                const response = await api.getDeepInsights(uploadId);
+                if (response.status === 'complete' && response.insights) {
+                    setDeepInsights(response.insights);
+                }
+            } catch (error) {
+                console.error('Deep insights failed:', error);
+            } finally {
+                setDeepInsightsLoading(false);
+            }
+        };
+
+        fetchDeepInsights();
+    }, [uploadId, aiInsights, deepInsights, deepInsightsLoading]);
+
     const isLoading = aiStatus === 'preprocessing' || aiStatus === 'analyzing';
     const hasError = aiStatus === 'error';
+
 
     return (
         <div className="col-span-1 md:col-span-4 mt-8">
@@ -363,6 +502,16 @@ export default function AIInsightsSection() {
                             />
                         </InsightCard>
                     </div>
+
+                    {/* Deep Insights - Hierarchical Timeline */}
+                    {(deepInsights || deepInsightsLoading) && (
+                        <div className="mt-8">
+                            <InsightsDisplay
+                                data={deepInsights}
+                                isLoading={deepInsightsLoading}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

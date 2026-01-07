@@ -116,7 +116,15 @@ export const useOrbitStore = create<OrbitState>()(
             isPipelineReady: false,
             processingLog: [],
 
-            setUploadId: (id) => set({ uploadId: id }),
+            // Clear AI insights when upload changes to prevent stale data
+            setUploadId: (id) => set({
+                uploadId: id,
+                aiInsights: null,
+                aiStatus: 'idle',
+                aiProgress: 0,
+                aiStage: '',
+                aiEta: 0
+            }),
             addLog: (log) => set((state) => ({ processingLog: [...state.processingLog, log] })),
             setPipelineReady: (ready) => set({ isPipelineReady: ready }),
 
