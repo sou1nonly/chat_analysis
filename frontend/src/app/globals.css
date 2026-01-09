@@ -71,6 +71,25 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #52525b;
+  }
+
   h1,
   h2,
   h3,
@@ -94,6 +113,15 @@
   .card-hover:hover {
     border-color: var(--color-border-hover);
     box-shadow: var(--shadow-glow-purple);
+  }
+
+  /* Utility for custom scroll containers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #52525b;
   }
 
   /* Neon text glow */

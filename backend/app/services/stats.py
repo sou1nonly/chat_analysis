@@ -13,7 +13,9 @@ from app.services.parser import ParsedMessage
 
 
 # Emoji detection regex
-EMOJI_REGEX = re.compile(r'[\U0001F300-\U0001F9FF]', re.UNICODE)
+# Emoji detection regex - Strictly emotions/faces/hearts (No objects/nature like 🍀✨)
+# Ranges: Emoticons(1F600-1F64F), Supp Faces(1F910-1F92F, 1F970-1F97F), Romance/Hearts(1F48B-1F49F), Red Heart(2764)
+EMOJI_REGEX = re.compile(r'[\U0001F600-\U0001F64F\U0001F910-\U0001F92F\U0001F970-\U0001F97F\U0001F48B-\U0001F49F\u2764]', re.UNICODE)
 URL_REGEX = re.compile(r'(https?://[^\s]+)')
 
 # Stopwords for word cloud
@@ -127,8 +129,8 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
     # Structure: [{'date': '2023-01', 'emojis': [{'emoji': '😂', 'count': 42}, ...]}, ...]
     timeline_emojis = []
     for month_key in sorted(monthly_emoji_counts.keys()):
-        # Get top 3 emojis for this month
-        month_top = sorted(monthly_emoji_counts[month_key].items(), key=lambda x: x[1], reverse=True)[:5]
+        # Get top 20 emojis for this month to ensure variety in frontend graphs
+        month_top = sorted(monthly_emoji_counts[month_key].items(), key=lambda x: x[1], reverse=True)[:20]
         timeline_emojis.append({
             'date': month_key,
             'emojis': [{'emoji': e, 'count': c} for e, c in month_top]

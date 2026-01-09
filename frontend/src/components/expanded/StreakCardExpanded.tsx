@@ -87,35 +87,37 @@ export default function StreakCardExpanded({ onClose }: Props) {
         <div className="space-y-8">
             {/* Stats Row */}
             <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-zinc-800/50 rounded-2xl p-5 border border-zinc-700/50 text-center">
-                    <p className="text-3xl font-bold text-orange-400 font-heading">🔥 {current}</p>
-                    <p className="text-zinc-500 text-xs mt-1">Current Streak</p>
+                <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-center hover:bg-white/10 transition-colors">
+                    <p className="text-3xl font-bold text-orange-400 font-heading drop-shadow-md">🔥 {current}</p>
+                    <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wider font-medium">Current Streak</p>
                 </div>
-                <div className="bg-zinc-800/50 rounded-2xl p-5 border border-zinc-700/50 text-center">
-                    <p className="text-3xl font-bold text-purple-400 font-heading">⚡ {max}</p>
-                    <p className="text-zinc-500 text-xs mt-1">Best Streak</p>
+                <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-center hover:bg-white/10 transition-colors">
+                    <p className="text-3xl font-bold text-purple-400 font-heading drop-shadow-md">⚡ {max}</p>
+                    <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wider font-medium">Best Streak</p>
                 </div>
-                <div className="bg-zinc-800/50 rounded-2xl p-5 border border-zinc-700/50 text-center">
-                    <p className="text-3xl font-bold text-white font-heading">{consistencyScore}%</p>
-                    <p className="text-zinc-500 text-xs mt-1">Consistency</p>
+                <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-center hover:bg-white/10 transition-colors">
+                    <p className="text-3xl font-bold text-white font-heading drop-shadow-md">{consistencyScore}%</p>
+                    <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wider font-medium">Consistency</p>
                 </div>
-                <div className="bg-zinc-800/50 rounded-2xl p-5 border border-zinc-700/50 text-center">
-                    <p className="text-3xl font-bold text-white font-heading">{allDays.length}</p>
-                    <p className="text-zinc-500 text-xs mt-1">Total Active Days</p>
+                <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-center hover:bg-white/10 transition-colors">
+                    <p className="text-3xl font-bold text-white font-heading drop-shadow-md">{allDays.length}</p>
+                    <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wider font-medium">Total Active Days</p>
                 </div>
             </section>
 
             {/* Calendar Heatmap */}
-            <section>
-                <h3 className="text-white font-bold text-lg mb-4">365-Day Activity</h3>
-                <div className="overflow-x-auto pb-4">
-                    <div className="flex gap-1" style={{ minWidth: '800px' }}>
+            <section className="bg-white/5 backdrop-blur-md rounded-3xl p-6 border border-white/10">
+                <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-purple-500 rounded-full" /> 365-Day Activity
+                </h3>
+                <div className="overflow-x-auto pb-2 scrollbar-hide">
+                    <div className="flex gap-1.5" style={{ minWidth: '800px' }}>
                         {weeks.map((week, wIdx) => (
-                            <div key={wIdx} className="flex flex-col gap-1">
+                            <div key={wIdx} className="flex flex-col gap-1.5">
                                 {week.map((day, dIdx) => (
                                     <div
                                         key={`${wIdx}-${dIdx}`}
-                                        className={`w-3 h-3 rounded-sm ${getColor(day.count)} transition-all hover:ring-1 hover:ring-white/50 cursor-pointer`}
+                                        className={`w-3.5 h-3.5 rounded-sm ${getColor(day.count)} transition-all duration-300 hover:scale-125 hover:shadow-[0_0_10px_currentColor] cursor-pointer`}
                                         title={`${day.date.toLocaleDateString()}: ${day.count} msgs`}
                                     />
                                 ))}
@@ -123,29 +125,37 @@ export default function StreakCardExpanded({ onClose }: Props) {
                         ))}
                     </div>
                 </div>
-                <div className="flex gap-2 text-[10px] text-zinc-500 items-center mt-2">
-                    <span>Less</span>
-                    <div className="w-3 h-3 bg-zinc-800/30 rounded-sm" />
-                    <div className="w-3 h-3 bg-purple-900/40 rounded-sm" />
-                    <div className="w-3 h-3 bg-purple-700/60 rounded-sm" />
-                    <div className="w-3 h-3 bg-purple-400 rounded-sm" />
-                    <span>More</span>
+                <div className="flex gap-3 text-[10px] text-zinc-500 items-center mt-4 border-t border-white/5 pt-3">
+                    <span className="uppercase tracking-widest font-medium">Less</span>
+                    <div className="w-3.5 h-3.5 bg-zinc-800/50 rounded-sm border border-white/5" />
+                    <div className="w-3.5 h-3.5 bg-purple-900/40 rounded-sm" />
+                    <div className="w-3.5 h-3.5 bg-purple-700/60 rounded-sm" />
+                    <div className="w-3.5 h-3.5 bg-purple-500/80 rounded-sm" />
+                    <div className="w-3.5 h-3.5 bg-purple-400 rounded-sm shadow-[0_0_8px_rgba(192,132,252,0.5)]" />
+                    <span className="uppercase tracking-widest font-medium">More</span>
                 </div>
             </section>
 
             {/* All Streaks */}
-            <section>
-                <h3 className="text-white font-bold text-lg mb-4">Notable Streaks (3+ days)</h3>
+            <section className="bg-white/5 backdrop-blur-md rounded-3xl p-6 border border-white/10">
+                <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-purple-500 rounded-full" /> Notable Streaks (3+ days)
+                </h3>
                 {sortedStreaks.length === 0 ? (
-                    <p className="text-zinc-500 italic">No streaks of 3+ days found</p>
+                    <p className="text-zinc-500 italic text-center py-8">No streaks of 3+ days found yet. Keep chatting!</p>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {sortedStreaks.map((streak, i) => (
-                            <div key={streak.start} className="flex justify-between items-center bg-zinc-800/30 rounded-xl p-3">
-                                <span className="text-zinc-400 text-sm">
-                                    {new Date(streak.start).toLocaleDateString()} → {new Date(streak.end).toLocaleDateString()}
+                            <div
+                                key={streak.start}
+                                className={`flex justify-between items-center bg-black/20 rounded-xl p-4 border border-white/5 transition-all hover:bg-white/5 ${i === 0 ? 'border-purple-500/30 bg-purple-500/5' : ''}`}
+                            >
+                                <span className="text-zinc-400 text-sm font-medium">
+                                    {new Date(streak.start).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
+                                    <span className="mx-2 text-zinc-600">→</span>
+                                    {new Date(streak.end).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
                                 </span>
-                                <span className={`font-mono font-bold ${i === 0 ? 'text-purple-400' : 'text-zinc-300'}`}>
+                                <span className={`font-mono font-bold ${i === 0 ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-zinc-300'}`}>
                                     {streak.length} days
                                 </span>
                             </div>

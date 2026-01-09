@@ -86,8 +86,7 @@ export default function ReportPage() {
                 >
                     {/* Row 1: Overview + Activity Chart + Streak */}
                     <div
-                        onClick={() => handleExpand('summary')}
-                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <SummaryCard />
                     </div>
@@ -115,6 +114,7 @@ export default function ReportPage() {
                     </div>
 
                     <div
+                        onClick={() => handleExpand('wordcloud')}
                         className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-yellow-500/30 transition-all"
                     >
                         <WordCloudCard />
@@ -129,22 +129,19 @@ export default function ReportPage() {
                     </div>
 
                     <div
-                        onClick={() => handleExpand('replyTime')}
-                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-green-500/30 transition-all"
+                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <ReplyTimingCard />
                     </div>
 
                     <div
-                        onClick={() => handleExpand('aura')}
-                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <AuraCard />
                     </div>
 
                     <div
-                        onClick={() => handleExpand('rhythm')}
-                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <RhythmCard />
                     </div>
@@ -164,8 +161,7 @@ export default function ReportPage() {
                     </div>
 
                     <div
-                        onClick={() => handleExpand('initiator')}
-                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <InitiatorCard />
                     </div>

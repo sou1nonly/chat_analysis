@@ -31,7 +31,7 @@ export default function ExpandedModal({ isOpen, onClose, title, subtitle, childr
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ type: "spring", damping: 30, stiffness: 350 }}
-                        className="fixed inset-4 md:inset-10 lg:inset-20 bg-zinc-950/95 border border-white/10 rounded-3xl shadow-2xl z-[101] flex flex-col overflow-hidden backdrop-blur-xl"
+                        className="fixed inset-4 md:inset-10 lg:inset-20 bg-[#050507]/90 border border-white/10 rounded-3xl shadow-2xl z-[101] flex flex-col overflow-hidden backdrop-blur-2xl ring-1 ring-white/5"
                     >
                         {/* Header */}
                         <div className="p-6 border-b border-zinc-800 flex justify-between items-start bg-gradient-to-b from-zinc-800/50 to-transparent">
