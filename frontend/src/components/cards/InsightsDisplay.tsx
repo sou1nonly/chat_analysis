@@ -170,41 +170,92 @@ function YearCard({
     );
 }
 
-// Month card (for timeline view)
-function MonthCard({ data }: { data: InsightsData['monthly'][0] }) {
+// Month card (for timeline view) - NOW EXPANDABLE
+function MonthCard({
+    data,
+    isExpanded,
+    onToggle
+}: {
+    data: InsightsData['monthly'][0];
+    isExpanded: boolean;
+    onToggle: () => void;
+}) {
     const monthName = new Date(data.month + "-01").toLocaleDateString('en-US', {
         month: 'short',
         year: 'numeric'
     });
 
     return (
-        <div className="p-4 rounded-xl border border-white/5 bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors cursor-pointer">
+        <motion.div
+            layout
+            onClick={onToggle}
+            className={`p-4 rounded-xl border transition-all cursor-pointer ${isExpanded
+                ? 'border-purple-500/50 bg-zinc-800/70 col-span-1 md:col-span-2 lg:col-span-3 shadow-lg shadow-purple-500/10'
+                : 'border-white/5 bg-zinc-800/30 hover:bg-zinc-800/50 hover:border-white/10'
+                }`}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+        >
             <div className="flex items-center justify-between mb-2">
                 <span className="font-medium text-white">{monthName}</span>
-                <ActivityBadge level={data.activity} />
+                <div className="flex items-center gap-2">
+                    <ActivityBadge level={data.activity} />
+                    {isExpanded && (
+                        <motion.span
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="text-xs text-purple-400"
+                        >
+                            Click to collapse
+                        </motion.span>
+                    )}
+                </div>
             </div>
-            <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2">
-                {data.narrative}
-            </p>
+
+            <AnimatePresence mode="wait">
+                <motion.p
+                    key={isExpanded ? 'full' : 'truncated'}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`text-sm text-zinc-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'
+                        }`}
+                >
+                    {data.narrative}
+                </motion.p>
+            </AnimatePresence>
+
             {data.topics.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                    {data.topics.slice(0, 3).map((topic, i) => (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {(isExpanded ? data.topics : data.topics.slice(0, 3)).map((topic, i) => (
                         <span
                             key={i}
-                            className="px-1.5 py-0.5 text-xs rounded bg-white/5 text-zinc-400"
+                            className="px-2 py-0.5 text-xs rounded-full bg-white/5 text-zinc-400 border border-white/5"
                         >
                             {topic}
                         </span>
                     ))}
                 </div>
             )}
-        </div>
+
+            {isExpanded && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 pt-3 border-t border-white/5 flex items-center gap-4 text-xs text-zinc-500"
+                >
+                    <span>{data.messages.toLocaleString()} messages</span>
+                    <span>Trend: {data.trend}</span>
+                </motion.div>
+            )}
+        </motion.div>
     );
 }
 
 export default function InsightsDisplay({ data, isLoading }: InsightsDisplayProps) {
     const [activeTab, setActiveTab] = useState<'overview' | 'timeline'>('overview');
     const [expandedYear, setExpandedYear] = useState<number | null>(null);
+    const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
     // Auto-expand latest year
     useEffect(() => {
@@ -254,8 +305,8 @@ export default function InsightsDisplay({ data, isLoading }: InsightsDisplayProp
                     <button
                         onClick={() => setActiveTab('overview')}
                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${activeTab === 'overview'
-                                ? 'bg-purple-600 text-white'
-                                : 'text-zinc-400 hover:text-white'
+                            ? 'bg-purple-600 text-white'
+                            : 'text-zinc-400 hover:text-white'
                             }`}
                     >
                         Overview
@@ -263,8 +314,8 @@ export default function InsightsDisplay({ data, isLoading }: InsightsDisplayProp
                     <button
                         onClick={() => setActiveTab('timeline')}
                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${activeTab === 'timeline'
-                                ? 'bg-purple-600 text-white'
-                                : 'text-zinc-400 hover:text-white'
+                            ? 'bg-purple-600 text-white'
+                            : 'text-zinc-400 hover:text-white'
                             }`}
                     >
                         Timeline
@@ -302,7 +353,14 @@ export default function InsightsDisplay({ data, isLoading }: InsightsDisplayProp
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
                     >
                         {data.monthly.slice(-12).reverse().map((month) => (
-                            <MonthCard key={month.month} data={month} />
+                            <MonthCard
+                                key={month.month}
+                                data={month}
+                                isExpanded={expandedMonth === month.month}
+                                onToggle={() => setExpandedMonth(
+                                    expandedMonth === month.month ? null : month.month
+                                )}
+                            />
                         ))}
                     </motion.div>
                 )}

@@ -11,16 +11,17 @@ import StreakCard from "@/components/cards/StreakCard";
 import EngagementCard from "@/components/cards/EngagementCard";
 import LinksCard from "@/components/cards/LinksCard";
 import ActivityHeatmapCard from "../../components/cards/ActivityHeatmapCard";
+import EmojiTimelineCard from "@/components/cards/EmojiTimelineCard";
 import InitiatorCard from "@/components/cards/InitiatorCard";
 import ReplyTimingCard from "@/components/cards/ReplyTimingCard";
 import AIInsightsSection from "@/components/cards/AIInsightsSection";
-import DetailsWrapper from "@/components/ui/DetailsWrapper";
 import ExpandedViewContainer from "@/components/ui/ExpandedViewContainer";
 import ProcessingOverlay from "@/components/ui/ProcessingOverlay";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, ShieldCheck } from "lucide-react";
+import { motion } from "framer-motion";
+import { Sparkles, ArrowLeft } from "lucide-react";
 
 export default function ReportPage() {
     const {
@@ -31,13 +32,11 @@ export default function ReportPage() {
     const router = useRouter();
 
     useEffect(() => {
-        // If no data, redirect to airlock
         if (!stats && status === "idle") {
             router.push("/");
         }
     }, [stats, status, router]);
 
-    // Mark pipeline as ready when stats are loaded (AI will be separate)
     useEffect(() => {
         if (stats && !isPipelineReady) {
             setPipelineReady(true);
@@ -51,97 +50,141 @@ export default function ReportPage() {
     if (!stats) return null;
 
     return (
-        <main className="min-h-screen bg-background py-12 px-4 md:px-8">
-            <div className="max-w-7xl mx-auto space-y-8">
+        <main className="min-h-screen py-6 px-4 md:px-6 bg-[#050507]">
+            <div className="max-w-[1400px] mx-auto space-y-5">
 
                 {/* Header */}
-                <header className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-zinc-800 pb-6">
-                    <div>
-                        <h1 className="text-4xl font-heading font-bold text-white tracking-tight">Orbit Intelligence</h1>
-                        <p className="text-zinc-500 text-sm uppercase tracking-widest mt-2">
-                            RELATIONSHIP ANALYTICS PRO MAX
-                        </p>
+                <motion.header
+                    className="flex items-center justify-between"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                >
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => router.push("/")}
+                            className="w-9 h-9 rounded-xl bg-[#111114] border border-white/5 flex items-center justify-center text-gray-500 hover:text-white hover:border-purple-500/30 transition-all cursor-pointer"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                        <h1 className="text-xl font-heading font-bold text-white">
+                            Orbit <span className="text-purple-400">Intelligence</span>
+                        </h1>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-800">
-                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                        <span className="text-xs text-zinc-400 font-medium">Server Mode • Powered by Ollama</span>
+                    <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-full">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                        <span className="text-xs text-purple-400 font-medium">AI Powered</span>
                     </div>
-                </header>
+                </motion.header>
 
-                {/* The Bento Grid */}
-                <section className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[minmax(180px,auto)]">
-                    {/* Row 1: The Big Picture */}
-                    <DetailsWrapper onExpand={() => handleExpand('summary')} colSpan="col-span-1 md:col-span-2 row-span-2">
+                {/* Bento Grid */}
+                <motion.div
+                    className="grid grid-cols-12 gap-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                >
+                    {/* Row 1: Overview + Activity Chart + Streak */}
+                    <div
+                        onClick={() => handleExpand('summary')}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                    >
                         <SummaryCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    <DetailsWrapper onExpand={() => handleExpand('trend')} colSpan="col-span-1 md:col-span-2">
+                    <div
+                        onClick={() => handleExpand('trend')}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                    >
                         <TrendCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    <DetailsWrapper onExpand={() => handleExpand('streak')}>
+                    <div
+                        onClick={() => handleExpand('streak')}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-green-500/30 transition-all"
+                    >
                         <StreakCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    <DetailsWrapper onExpand={() => handleExpand('initiator')}>
-                        <InitiatorCard />
-                    </DetailsWrapper>
-
-                    {/* Row 2: Deep Habits */}
-                    <DetailsWrapper onExpand={() => handleExpand('heatmap')} colSpan="col-span-1 md:col-span-2">
+                    {/* Row 2: Heatmap + Word Cloud */}
+                    <div
+                        onClick={() => handleExpand('heatmap')}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                    >
                         <ActivityHeatmapCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    <WordCloudCard />
+                    <div
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-yellow-500/30 transition-all"
+                    >
+                        <WordCloudCard />
+                    </div>
 
-                    {/* Row 3: Engagement Layer */}
-                    <DetailsWrapper onExpand={() => handleExpand('engagement')} colSpan="col-span-1 md:col-span-2">
+                    {/* Row 3: Engagement + Reply Speed + Aura + Rhythm */}
+                    <div
+                        onClick={() => handleExpand('engagement')}
+                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-blue-500/30 transition-all"
+                    >
                         <EngagementCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    <DetailsWrapper onExpand={() => handleExpand('replyTime')} colSpan="col-span-1 md:col-span-2">
+                    <div
+                        onClick={() => handleExpand('replyTime')}
+                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-green-500/30 transition-all"
+                    >
                         <ReplyTimingCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    {/* Row 4: Vibe Check */}
-                    <DetailsWrapper onExpand={() => handleExpand('aura')}>
+                    <div
+                        onClick={() => handleExpand('aura')}
+                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                    >
                         <AuraCard />
-                    </DetailsWrapper>
-                    <DetailsWrapper onExpand={() => handleExpand('rhythm')}>
+                    </div>
+
+                    <div
+                        onClick={() => handleExpand('rhythm')}
+                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                    >
                         <RhythmCard />
-                    </DetailsWrapper>
-                    <DetailsWrapper onExpand={() => handleExpand('links')} colSpan="col-span-1 md:col-span-2">
+                    </div>
+
+                    {/* Row 4: Links + Emoji Timeline + Initiator */}
+                    <div
+                        onClick={() => handleExpand('links')}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-blue-500/30 transition-all"
+                    >
                         <LinksCard />
-                    </DetailsWrapper>
+                    </div>
 
-                    {/* Row 5: AI Insights Section */}
-                    <AIInsightsSection />
+                    <div
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                    >
+                        <EmojiTimelineCard />
+                    </div>
 
-                    {/* Row 6: Final Receipt */}
-                    <div className="col-span-1 md:col-span-4 mt-8 flex justify-center">
-                        <div className="w-full max-w-md">
+                    <div
+                        onClick={() => handleExpand('initiator')}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                    >
+                        <InitiatorCard />
+                    </div>
+
+                    {/* AI Insights - Full Width */}
+                    <div className="col-span-12">
+                        <AIInsightsSection />
+                    </div>
+
+                    {/* Receipt */}
+                    <div className="col-span-12 flex justify-center py-6">
+                        <div className="w-full max-w-sm">
                             <ReceiptCard />
                         </div>
                     </div>
-                </section>
+                </motion.div>
 
-                <footer className="text-center text-zinc-600 text-xs py-12">
-                    Generated by Orbit v3.0 • Three-Tier Architecture
-                </footer>
                 <ExpandedViewContainer />
                 <ProcessingOverlay />
-            </div>
-
-            {/* In-App Support Bubble */}
-            <div className="fixed bottom-6 right-6 z-50 group">
-                <button className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-all duration-300">
-                    <MessageCircle className="w-6 h-6" />
-                </button>
-                <div className="absolute bottom-full right-0 mb-2 w-48 bg-white text-black p-3 rounded-xl text-xs shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none origin-bottom-right transform scale-95 group-hover:scale-100">
-                    <p className="font-bold mb-1">Need help?</p>
-                    <p>Our engineers are sleeping, but the AI is awake.</p>
-                </div>
             </div>
         </main>
     );

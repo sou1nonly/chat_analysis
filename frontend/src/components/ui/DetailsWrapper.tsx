@@ -1,39 +1,53 @@
 "use client";
 
-import { Maximize2 } from "lucide-react";
+import { ReactNode } from "react";
 import { motion } from "framer-motion";
+import { clsx } from "clsx";
 
 interface DetailsWrapperProps {
-    children: React.ReactNode;
-    onExpand: () => void;
-    className?: string;
+    children: ReactNode;
+    onExpand?: () => void;
     colSpan?: string;
-    rowSpan?: string;
+    className?: string;
 }
 
-export default function DetailsWrapper({ children, onExpand, className = "", colSpan = "col-span-1", rowSpan = "row-span-1" }: DetailsWrapperProps) {
+export default function DetailsWrapper({
+    children,
+    onExpand,
+    colSpan = "col-span-1",
+    className,
+}: DetailsWrapperProps) {
     return (
         <motion.div
-            whileHover={{ scale: 1.02 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className={`relative group ${colSpan} ${rowSpan} ${className}`}
+            layout
+            onClick={onExpand}
+            className={clsx(
+                // Base card styles
+                "relative rounded-[20px] overflow-hidden",
+                "bg-[#1C1C1E] border border-white/[0.06]",
+                // Interactive styles
+                "cursor-pointer transition-all duration-200 ease-out",
+                "hover:bg-[#2C2C2E] hover:border-white/[0.1]",
+                "hover:shadow-[0_4px_12px_rgba(0,0,0,0.3)]",
+                "active:scale-[0.995]",
+                // Grid placement
+                colSpan,
+                className
+            )}
+            whileHover={{ y: -2 }}
+            transition={{ duration: 0.2 }}
         >
-            {/* The Card Content */}
-            <div className="h-full w-full" onClick={onExpand}>
-                {children}
+            {/* Expand hint - appears on hover */}
+            <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[10px] text-[#636366] bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm">
+                    Click to expand
+                </span>
             </div>
 
-            {/* Hover Overlay Trigger */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onExpand();
-                }}
-                className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-black/80 z-20 border border-white/10"
-                title="Expand for details"
-            >
-                <Maximize2 className="w-4 h-4" />
-            </button>
+            {/* Card content */}
+            <div className="h-full group">
+                {children}
+            </div>
         </motion.div>
     );
 }

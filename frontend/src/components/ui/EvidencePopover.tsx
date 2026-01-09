@@ -11,9 +11,9 @@ interface EvidencePopoverProps {
     isLoading: boolean;
 }
 
-export default function EvidencePopover({ onClose, title, results, isLoading }: EvidencePopoverProps) {
+export default function EvidencePopover({ onClose, title, results = [], isLoading }: EvidencePopoverProps) {
     // Auto-manage visibility: show if loading OR if there are results
-    const isOpen = isLoading || results.length > 0;
+    const isOpen = isLoading || (results && results.length > 0);
 
     return (
         <AnimatePresence>

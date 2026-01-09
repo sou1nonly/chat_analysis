@@ -20,8 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={clsx(inter.variable, spaceGrotesk.variable, "antialiased min-h-screen transition-colors duration-300 selection:bg-pink-500/30")}>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body
+        className={clsx(inter.variable, spaceGrotesk.variable, "antialiased min-h-screen transition-colors duration-300 selection:bg-pink-500/30")}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

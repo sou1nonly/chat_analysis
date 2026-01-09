@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useOrbitStore } from "@/store/useOrbitStore";
-import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText } from "lucide-react";
+import { motion } from "framer-motion";
+import { Upload, FileText, Shield, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
+import api from "@/lib/api";
 
 interface FileDropProps {
     onFileSelect?: (file: File) => void;
@@ -12,7 +13,48 @@ interface FileDropProps {
 
 export default function FileDrop({ onFileSelect }: FileDropProps) {
     const [isDragging, setIsDragging] = useState(false);
-    const { setFiles, setStatus } = useOrbitStore();
+    const [isUploading, setIsUploading] = useState(false);
+    const { setStatus, setProgress, setStats, setUploadId, addLog, setPipelineReady } = useOrbitStore();
+
+    const handleUpload = useCallback(async (file: File) => {
+        setIsUploading(true);
+        setStatus("parsing", "Uploading your chat...");
+        setProgress(10);
+        addLog("[UPLOAD] Starting file upload...");
+        setPipelineReady(false);
+
+        try {
+            // Simulate progress during upload
+            setProgress(30);
+            addLog(`[UPLOAD] Processing ${file.name}...`);
+
+            // Upload to backend
+            const response = await api.uploadFile(file);
+
+            setProgress(70);
+            addLog(`[PARSE] Parsed ${response.message_count.toLocaleString()} messages`);
+            addLog(`[STATS] Computing statistics...`);
+
+            setProgress(90);
+
+            // Set the stats and upload ID
+            setUploadId(response.upload_id);
+            setStats(response.stats as any);
+
+            setProgress(100);
+            addLog("[COMPLETE] Analysis complete!");
+            setStatus("complete");
+            setPipelineReady(true);
+
+        } catch (error) {
+            console.error("Upload failed:", error);
+            addLog(`[ERROR] Upload failed: ${error}`);
+            setStatus("error", "Failed to process file. Please try again.");
+            setPipelineReady(true);
+        } finally {
+            setIsUploading(false);
+        }
+    }, [setStatus, setProgress, setStats, setUploadId, addLog, setPipelineReady]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -34,18 +76,19 @@ export default function FileDrop({ onFileSelect }: FileDropProps) {
                 if (onFileSelect) {
                     onFileSelect(files[0]);
                 } else {
-                    setFiles(files);
-                    setStatus("parsing", "Reading your chat logs...");
+                    handleUpload(files[0]);
                 }
             }
         },
-        [setFiles, setStatus, onFileSelect]
+        [handleUpload, onFileSelect]
     );
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleClick = () => {
-        fileInputRef.current?.click();
+        if (!isUploading) {
+            fileInputRef.current?.click();
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,14 +97,24 @@ export default function FileDrop({ onFileSelect }: FileDropProps) {
             if (onFileSelect) {
                 onFileSelect(files[0]);
             } else {
-                setFiles(files);
-                setStatus("parsing", "Reading your chat logs...");
+                handleUpload(files[0]);
             }
         }
     };
 
+    if (isUploading) {
+        return (
+            <div className="w-full max-w-lg mx-auto">
+                <div className="flex flex-col items-center justify-center py-16 px-8 text-center space-y-4 bg-[#111114] rounded-2xl border border-purple-500/20">
+                    <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                    <p className="text-gray-400 text-sm">Processing your chat...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="w-full max-w-xl mx-auto px-6">
+        <div className="w-full max-w-lg mx-auto">
             <input
                 type="file"
                 ref={fileInputRef}
@@ -73,48 +126,52 @@ export default function FileDrop({ onFileSelect }: FileDropProps) {
                 layout
                 onClick={handleClick}
                 className={clsx(
-                    "relative group rounded-3xl border-2 border-dashed transition-all duration-300 ease-out cursor-pointer overflow-hidden",
+                    "relative group rounded-2xl border-2 transition-all duration-200 cursor-pointer overflow-hidden",
                     isDragging
-                        ? "border-pink-500 bg-pink-500/5 shadow-[0_0_40px_rgba(236,72,153,0.3)]"
-                        : "border-zinc-800 hover:border-zinc-700 bg-zinc-900/50"
+                        ? "border-purple-500 bg-purple-500/[0.05] shadow-[0_0_40px_rgba(139,92,246,0.15)]"
+                        : "border-dashed border-[#333] hover:border-[#555] bg-[#111114]"
                 )}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
             >
-                {/* Glowing Gradient Pulse Background */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-700 pointer-events-none">
-                    <div className="absolute inset-0 bg-gradient-aura blur-3xl opacity-30 animate-pulse" />
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-24 px-8 text-center space-y-6 relative z-10">
+                <div className="flex flex-col items-center justify-center py-16 px-8 text-center space-y-5">
+                    {/* Icon */}
                     <motion.div
-                        animate={isDragging ? { scale: 1.1, rotate: 5 } : { scale: 1, rotate: 0 }}
-                        className="p-6 rounded-full bg-zinc-900 border border-zinc-800 shadow-xl"
+                        animate={isDragging ? { scale: 1.1, rotate: 3 } : { scale: 1, rotate: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className={clsx(
+                            "w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-200",
+                            isDragging
+                                ? "bg-purple-500/20 text-purple-400"
+                                : "bg-[#1A1A1F] text-gray-500 group-hover:text-white group-hover:bg-[#222]"
+                        )}
                     >
                         {isDragging ? (
-                            <FileText className="w-10 h-10 text-pink-500" />
+                            <FileText className="w-6 h-6" />
                         ) : (
-                            <Upload className="w-10 h-10 text-zinc-400 group-hover:text-white transition-colors" />
+                            <Upload className="w-6 h-6" />
                         )}
                     </motion.div>
 
+                    {/* Text */}
                     <div className="space-y-2">
-                        <h3 className="text-2xl font-heading font-medium text-white">
-                            Drop your chat logs here
+                        <h3 className="text-xl font-heading font-medium text-white">
+                            {isDragging ? "Drop it here" : "Drop your chat export"}
                         </h3>
-                        <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">
-                            Or click to browse <span className="text-zinc-200">_chat.txt</span> (WhatsApp) and{" "}
-                            <span className="text-zinc-200">messages.json</span> (Instagram)
+                        <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                            or click to browse your files
                         </p>
                     </div>
 
-                    <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-medium text-blue-400">
-                        <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    {/* Privacy Badge */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
+                        <Shield className="w-3.5 h-3.5 text-green-400" />
+                        <span className="text-xs text-green-400 font-medium">
+                            100% private • runs locally
                         </span>
-                        <span>Processing locally. Your data never leaves this device.</span>
                     </div>
                 </div>
             </motion.div>

@@ -29,6 +29,7 @@ class WeekBucket:
     question_ratio: float
     participant_balance: float  # 0.5 = equal, >0.5 = P1 dominates
     participants: Dict[str, int]  # {name: count}
+    narrative: str = ""  # AI-generated weekly summary
     
     def to_narrative(self, participant_names: List[str]) -> str:
         """Convert to natural language summary."""
@@ -109,7 +110,7 @@ class HierarchicalSummarizer:
     """
     Creates hierarchical summaries from chat messages.
     
-    Pipeline: Raw Messages → Preprocessed → Weekly → Monthly → Yearly
+    Pipeline: Raw Messages → Preprocessed → Weekly AI → Monthly AI → Yearly AI
     """
     
     def __init__(self, messages: List[Dict[str, Any]]):
@@ -121,27 +122,55 @@ class HierarchicalSummarizer:
         self.participants: List[str] = []
         
     def run_pipeline(self) -> Dict[str, Any]:
-        """Run the full summarization pipeline."""
-        print("[PIPELINE] Starting hierarchical summarization...")
+        """Run the full hierarchical AI summarization pipeline."""
+        import time
+        start_time = time.time()
         
-        # Step 1: Preprocess
+        print("=" * 60)
+        print("[PIPELINE] Starting Hierarchical AI Summarization")
+        print(f"[INFO] Total messages: {len(self.raw_messages)}")
+        print("=" * 60)
+        
+        # Step 1: Preprocess (~5 seconds)
+        step_start = time.time()
+        print("\n[1/5] Preprocessing messages...")
         self.preprocessed = preprocess_all_messages(self.raw_messages)
-        
-        # Extract participant names
         self.participants = list(set(m.get('sender', 'Unknown') for m in self.preprocessed))
         self.participants.sort()
+        print(f"      Done in {time.time() - step_start:.1f}s")
+        print(f"      Participants: {', '.join(self.participants)}")
         
-        # Step 2: Create weekly buckets
-        self._create_weekly_buckets()
+        # Step 2: Create weekly buckets and AI summaries (~2-3 min)
+        step_start = time.time()
+        print(f"\n[2/5] Generating weekly AI summaries (100 msgs/week)...")
+        print(f"      Estimated time: 3-5 minutes")
+        self._create_weekly_buckets_with_ai()
+        print(f"      Done in {time.time() - step_start:.1f}s")
+        print(f"      Generated {len(self.weekly_buckets)} weekly summaries")
         
-        # Step 3: Aggregate to monthly
-        self._create_monthly_summaries()
+        # Step 3: Monthly summaries from weekly AI (~30 sec)
+        step_start = time.time()
+        print(f"\n[3/5] Synthesizing monthly summaries from weekly...")
+        self._create_monthly_summaries_from_weekly()
+        print(f"      Done in {time.time() - step_start:.1f}s")
+        print(f"      Generated {len(self.monthly_summaries)} monthly summaries")
         
-        # Step 4: Aggregate to yearly
-        self._create_yearly_summaries()
+        # Step 4: Yearly summaries from monthly AI (~15 sec)
+        step_start = time.time()
+        print(f"\n[4/5] Synthesizing yearly summaries from monthly...")
+        self._create_yearly_summaries_with_ai()
+        print(f"      Done in {time.time() - step_start:.1f}s")
+        print(f"      Generated {len(self.yearly_summaries)} yearly summaries")
         
-        print(f"[OK] Pipeline complete: {len(self.weekly_buckets)} weeks, "
-              f"{len(self.monthly_summaries)} months, {len(self.yearly_summaries)} years")
+        # Step 5: Build context
+        step_start = time.time()
+        print(f"\n[5/5] Building AI context...")
+        
+        total_time = time.time() - start_time
+        print("\n" + "=" * 60)
+        print(f"[OK] Pipeline complete in {total_time:.1f}s ({total_time/60:.1f} min)")
+        print(f"     {len(self.weekly_buckets)} weeks → {len(self.monthly_summaries)} months → {len(self.yearly_summaries)} years")
+        print("=" * 60)
         
         return {
             "participants": self.participants,
@@ -150,8 +179,8 @@ class HierarchicalSummarizer:
             "yearly": [asdict(y) for y in self.yearly_summaries]
         }
     
-    def _create_weekly_buckets(self):
-        """Group messages by ISO week and compute statistics."""
+    def _create_weekly_buckets_with_ai(self):
+        """Group messages by ISO week, compute stats, and generate AI summaries."""
         weeks: Dict[str, List[Dict]] = defaultdict(list)
         
         for msg in self.preprocessed:
@@ -159,8 +188,15 @@ class HierarchicalSummarizer:
             if week_id != 'unknown':
                 weeks[week_id].append(msg)
         
-        for week_id in sorted(weeks.keys()):
+        sorted_weeks = sorted(weeks.keys())
+        total_weeks = len(sorted_weeks)
+        
+        for idx, week_id in enumerate(sorted_weeks):
             msgs = weeks[week_id]
+            
+            # Progress indicator
+            if (idx + 1) % 10 == 0 or idx == 0:
+                print(f"      Week {idx + 1}/{total_weeks}: {week_id}")
             
             # Calculate stats
             sentiments = [m['sentiment'] for m in msgs if m.get('sentiment', 0) != 0]
@@ -186,6 +222,9 @@ class HierarchicalSummarizer:
             texts = [m.get('content', '') for m in msgs]
             top_words = extract_top_words(texts, n=10)
             
+            # Generate AI narrative for this week (50 msg sample)
+            narrative = self._generate_ai_weekly_summary(week_id, msgs)
+            
             bucket = WeekBucket(
                 week_id=week_id,
                 message_count=len(msgs),
@@ -193,10 +232,65 @@ class HierarchicalSummarizer:
                 top_words=top_words,
                 question_ratio=question_ratio,
                 participant_balance=balance,
-                participants=dict(participant_counts)
+                participants=dict(participant_counts),
+                narrative=narrative
             )
             
             self.weekly_buckets.append(bucket)
+    
+    def _generate_ai_weekly_summary(self, week_id: str, messages: List[Dict]) -> str:
+        """Generate AI summary for a week using 50 message samples."""
+        try:
+            import ollama
+            
+            # Sample up to 100 meaningful messages
+            meaningful_msgs = [
+                m for m in messages 
+                if m.get('classification') in ['statement', 'question'] 
+                and len(m.get('content', '')) > 10
+            ]
+            
+            sample_size = min(100, len(meaningful_msgs))
+            if sample_size < 3:
+                return f"A quiet week with {len(messages)} messages."
+            
+            # Even distribution sampling
+            step = max(1, len(meaningful_msgs) // sample_size)
+            sampled = meaningful_msgs[::step][:sample_size]
+            
+            p1 = self.participants[0] if self.participants else "Person 1"
+            p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
+            
+            conversation_sample = "\n".join([
+                f"{m.get('sender', 'Unknown')}: {m.get('content', '')[:120]}"
+                for m in sampled
+            ])
+            
+            prompt = f"""Summarize this week's conversation between {p1} and {p2} in 1-2 sentences. Focus on specific topics/events.
+
+CONVERSATION SAMPLES:
+{conversation_sample}
+
+Write a brief, specific summary (1-2 sentences):"""
+
+            response = ollama.generate(
+                model="deepseek-v3.1:671b-cloud",
+                prompt=prompt,
+                options={"temperature": 0.6, "num_predict": 60}
+            )
+            
+            result = response.get('response', '').strip()
+            if result and len(result) > 15:
+                return result
+            else:
+                return f"Week with {len(messages)} messages discussing various topics."
+                
+        except Exception as e:
+            return f"Week with {len(messages)} messages."
+    
+    def _create_weekly_buckets(self):
+        """Legacy method - redirects to AI version."""
+        self._create_weekly_buckets_with_ai()
     
     def _create_monthly_summaries(self):
         """Aggregate weekly buckets into monthly summaries."""
@@ -324,11 +418,11 @@ class HierarchicalSummarizer:
 CONVERSATION SAMPLES:
 {conversation_sample}
 
-Write a natural, specific summary (1-2 sentences only). Example: "They discussed wedding planning, shared work frustrations, and Neeraj asked about Annnu's new job interview."
+Write a natural, specific summary (1-2 sentences only). 
 Summary:"""
 
             response = ollama.generate(
-                model="qwen2.5:0.5b",
+                model="deepseek-v3.1:671b-cloud",
                 prompt=prompt,
                 options={"temperature": 0.7, "num_predict": 80}
             )
@@ -364,10 +458,132 @@ Summary:"""
             trend_text = "with consistent energy throughout"
         
         return f"A {activity} activity month between {p1} and {p2} with a {mood} vibe, {trend_text}."
-
     
-    def _create_yearly_summaries(self):
-        """Aggregate monthly summaries into yearly summaries."""
+    def _create_monthly_summaries_from_weekly(self):
+        """Synthesize monthly summaries from weekly AI narratives (hierarchical approach)."""
+        months: Dict[str, List[WeekBucket]] = defaultdict(list)
+        
+        for bucket in self.weekly_buckets:
+            try:
+                year = int(bucket.week_id.split('-W')[0])
+                week_num = int(bucket.week_id.split('-W')[1])
+                month_num = min(12, max(1, (week_num - 1) // 4 + 1))
+                month_id = f"{year}-{month_num:02d}"
+                months[month_id].append(bucket)
+            except (ValueError, IndexError):
+                continue
+        
+        sorted_months = sorted(months.keys())
+        print(f"      Processing {len(sorted_months)} months...")
+        
+        for idx, month_id in enumerate(sorted_months):
+            buckets = months[month_id]
+            
+            # Progress
+            if (idx + 1) % 3 == 0:
+                print(f"      Month {idx + 1}/{len(sorted_months)}: {month_id}")
+            
+            total_msgs = sum(b.message_count for b in buckets)
+            sentiments = [b.avg_sentiment for b in buckets]
+            avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+            
+            # Sentiment trend
+            if len(sentiments) >= 2:
+                first_half = sum(sentiments[:len(sentiments)//2]) / max(1, len(sentiments)//2)
+                second_half = sum(sentiments[len(sentiments)//2:]) / max(1, len(sentiments) - len(sentiments)//2)
+                if second_half > first_half + 0.1:
+                    trend = "improving"
+                elif second_half < first_half - 0.1:
+                    trend = "declining"
+                else:
+                    trend = "stable"
+            else:
+                trend = "stable"
+            
+            # Activity level
+            avg_weekly_msgs = total_msgs / len(buckets) if buckets else 0
+            if avg_weekly_msgs > 150:
+                activity = "high"
+            elif avg_weekly_msgs > 70:
+                activity = "medium"
+            else:
+                activity = "low"
+            
+            # Key topics
+            all_words = []
+            for b in buckets:
+                all_words.extend(b.top_words[:5])
+            key_topics = extract_top_words([' '.join(all_words)], n=5) if all_words else []
+            
+            # Balance
+            total_balance = sum(b.participant_balance * b.message_count for b in buckets)
+            avg_balance = total_balance / total_msgs if total_msgs > 0 else 0.5
+            
+            # Generate monthly narrative FROM WEEKLY SUMMARIES (hierarchical!)
+            narrative = self._synthesize_monthly_from_weekly(month_id, buckets, avg_sentiment, activity)
+            
+            summary = MonthSummary(
+                month=month_id,
+                week_count=len(buckets),
+                total_messages=total_msgs,
+                avg_sentiment=avg_sentiment,
+                sentiment_trend=trend,
+                activity_level=activity,
+                key_topics=key_topics,
+                participant_balance=avg_balance,
+                narrative=narrative
+            )
+            
+            self.monthly_summaries.append(summary)
+    
+    def _synthesize_monthly_from_weekly(
+        self,
+        month_id: str,
+        weekly_buckets: List[WeekBucket],
+        sentiment: float,
+        activity: str
+    ) -> str:
+        """Synthesize monthly narrative from weekly AI summaries."""
+        try:
+            import ollama
+            
+            # Combine weekly narratives
+            weekly_summaries = "\n".join([
+                f"- Week {b.week_id}: {b.narrative}"
+                for b in weekly_buckets if b.narrative
+            ])
+            
+            if not weekly_summaries:
+                return self._generate_fallback_narrative(month_id, sentiment, "stable", activity)
+            
+            p1 = self.participants[0] if self.participants else "Person 1"
+            p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
+            
+            prompt = f"""Based on these weekly summaries, write a 2-3 sentence monthly summary for {p1} and {p2}.
+
+WEEKLY SUMMARIES:
+{weekly_summaries}
+
+Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:"""
+
+            response = ollama.generate(
+                model="deepseek-v3.1:671b-cloud",
+                prompt=prompt,
+                options={"temperature": 0.6, "num_predict": 80}
+            )
+            
+            result = response.get('response', '').strip()
+            if result and len(result) > 20:
+                return result
+            else:
+                return self._generate_fallback_narrative(month_id, sentiment, "stable", activity)
+                
+        except Exception as e:
+            print(f"      [WARN] Monthly synthesis failed for {month_id}: {e}")
+            return self._generate_fallback_narrative(month_id, sentiment, "stable", activity)
+
+    def _create_yearly_summaries_with_ai(self):
+        """Synthesize yearly summaries from monthly AI narratives (hierarchical approach)."""
         years: Dict[int, List[MonthSummary]] = defaultdict(list)
         
         for summary in self.monthly_summaries:
@@ -377,8 +593,12 @@ Summary:"""
             except (ValueError, IndexError):
                 continue
         
-        for year in sorted(years.keys()):
+        sorted_years = sorted(years.keys())
+        print(f"      Processing {len(sorted_years)} years...")
+        
+        for year in sorted_years:
             months = years[year]
+            print(f"      Year {year}: {len(months)} months")
             
             total_msgs = sum(m.total_messages for m in months)
             sentiments = [m.avg_sentiment for m in months]
@@ -386,8 +606,8 @@ Summary:"""
             
             # Sentiment arc
             if len(sentiments) >= 3:
-                early = sum(sentiments[:len(sentiments)//3]) / (len(sentiments)//3)
-                late = sum(sentiments[-len(sentiments)//3:]) / (len(sentiments)//3)
+                early = sum(sentiments[:len(sentiments)//3]) / max(1, len(sentiments)//3)
+                late = sum(sentiments[-len(sentiments)//3:]) / max(1, len(sentiments)//3)
                 if late > early + 0.15:
                     arc = "The relationship grew warmer over the year"
                 elif late < early - 0.15:
@@ -396,21 +616,6 @@ Summary:"""
                     arc = "The connection stayed consistent throughout"
             else:
                 arc = "A period of steady connection"
-            
-            # Evolution description
-            p1 = self.participants[0] if self.participants else "Person 1"
-            p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
-            
-            if avg_sentiment > 0.25:
-                tone = "warm and supportive"
-            elif avg_sentiment > 0.1:
-                tone = "friendly and comfortable"
-            elif avg_sentiment > -0.1:
-                tone = "casual and routine"
-            else:
-                tone = "going through some challenges"
-            
-            evolution = f"In {year}, {p1} and {p2} had a {tone} dynamic. {arc}."
             
             # Highlights
             highlights = []
@@ -431,6 +636,9 @@ Summary:"""
             else:
                 patterns = "A quieter year with occasional conversations."
             
+            # Generate AI-powered yearly narrative FROM MONTHLY SUMMARIES
+            evolution = self._synthesize_yearly_from_monthly(year, months, avg_sentiment, arc)
+            
             yearly = YearSummary(
                 year=year,
                 month_count=len(months),
@@ -443,6 +651,72 @@ Summary:"""
             )
             
             self.yearly_summaries.append(yearly)
+    
+    def _synthesize_yearly_from_monthly(
+        self,
+        year: int,
+        monthly_summaries: List[MonthSummary],
+        sentiment: float,
+        arc: str
+    ) -> str:
+        """Synthesize yearly narrative from monthly AI summaries."""
+        try:
+            import ollama
+            
+            # Combine monthly narratives
+            monthly_texts = "\n".join([
+                f"- {m.month}: {m.narrative}"
+                for m in monthly_summaries if m.narrative
+            ])
+            
+            if not monthly_texts:
+                return self._generate_fallback_yearly(year, sentiment, arc)
+            
+            p1 = self.participants[0] if self.participants else "Person 1"
+            p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
+            
+            prompt = f"""Based on these monthly summaries, write a comprehensive 3-4 sentence yearly summary for {p1} and {p2} in {year}. Capture the key themes, events, and how their relationship evolved.
+
+MONTHLY SUMMARIES:
+{monthly_texts}
+
+Write a rich yearly narrative (3-4 sentences):"""
+
+            response = ollama.generate(
+                model="deepseek-v3.1:671b-cloud",
+                prompt=prompt,
+                options={"temperature": 0.6, "num_predict": 120}
+            )
+            
+            result = response.get('response', '').strip()
+            if result and len(result) > 30:
+                return result
+            else:
+                return self._generate_fallback_yearly(year, sentiment, arc)
+                
+        except Exception as e:
+            print(f"      [WARN] Yearly synthesis failed for {year}: {e}")
+            return self._generate_fallback_yearly(year, sentiment, arc)
+    
+    def _generate_fallback_yearly(self, year: int, sentiment: float, arc: str) -> str:
+        """Fallback yearly narrative when AI fails."""
+        p1 = self.participants[0] if self.participants else "Person 1"
+        p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
+        
+        if sentiment > 0.25:
+            tone = "warm and supportive"
+        elif sentiment > 0.1:
+            tone = "friendly and comfortable"
+        elif sentiment > -0.1:
+            tone = "casual and routine"
+        else:
+            tone = "going through some challenges"
+        
+        return f"In {year}, {p1} and {p2} had a {tone} dynamic. {arc}."
+    
+    def _create_yearly_summaries(self):
+        """Legacy method - redirects to AI version."""
+        self._create_yearly_summaries_with_ai()
     
     def build_ai_context(self, include_recent_messages: int = 10) -> str:
         """

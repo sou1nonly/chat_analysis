@@ -1,7 +1,7 @@
 "use client";
 
 import { useOrbitStore } from "@/store/useOrbitStore";
-import { MessageSquare, Clock, Calendar, Zap } from "lucide-react";
+import { MessageSquare, Clock, Calendar } from "lucide-react";
 
 export default function SummaryCard() {
     const { stats } = useOrbitStore();
@@ -10,49 +10,63 @@ export default function SummaryCard() {
 
     const count = stats.totalMessages;
     const topEmoji = stats.topEmojis[0]?.emoji || "✨";
-    // Ghost score placeholder for now, requires deeper analysis
-    const ghostScore = "???";
+    const emojiCount = stats.topEmojis[0]?.count || 0;
     const startDate = new Date(stats.startDate).toLocaleDateString(undefined, {
-        year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        year: 'numeric'
     });
 
+    const daysTogether = Math.ceil(
+        (new Date(stats.endDate).getTime() - new Date(stats.startDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
     return (
-        <div className="w-full grid grid-cols-2 gap-4">
-            {/* Stat 1: Total Messages */}
-            <div className="bg-zinc-800/50 rounded-3xl p-6 border border-zinc-700/50 flex flex-col justify-between aspect-square hover:bg-zinc-800 transition-colors">
-                <MessageSquare className="w-6 h-6 text-purple-400" />
+        <div className="h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-purple-400" />
+                </div>
                 <div>
-                    <p className="text-3xl font-heading font-bold text-white">{count.toLocaleString()}</p>
-                    <p className="text-xs text-zinc-500 uppercase mt-1">Total Texts</p>
+                    <h3 className="text-white font-semibold text-sm">Overview</h3>
+                    <p className="text-[9px] text-gray-500 uppercase tracking-wider">Quick Stats</p>
                 </div>
             </div>
 
-            {/* Stat 2: Top Emoji */}
-            <div className="bg-zinc-800/50 rounded-3xl p-6 border border-zinc-700/50 flex flex-col justify-between aspect-square hover:bg-zinc-800 transition-colors">
-                <span className="text-4xl">{topEmoji}</span>
-                <div>
-                    <p className="text-xs text-zinc-500 uppercase mt-2">Top Emoji</p>
-                    <p className="text-[10px] text-zinc-600">Used {stats.topEmojis[0]?.count} times</p>
+            {/* Compact Stats Grid */}
+            <div className="grid grid-cols-2 gap-3 flex-1">
+                {/* Total Messages */}
+                <div className="bg-[#0D0D0F] rounded-xl p-3 border border-white/5">
+                    <p className="text-2xl font-bold text-white font-heading">{count.toLocaleString()}</p>
+                    <p className="text-[9px] text-gray-500 uppercase mt-1">Total Messages</p>
                 </div>
-            </div>
 
-            {/* Stat 3: Ghost Score */}
-            <div className="bg-zinc-800/50 rounded-3xl p-6 border border-zinc-700/50 flex flex-col justify-between aspect-square hover:bg-zinc-800 transition-colors">
-                <Clock className="w-6 h-6 text-pink-400" />
-                <div>
-                    <p className="text-2xl font-heading font-bold text-white">{ghostScore}</p>
-                    <p className="text-xs text-zinc-500 uppercase mt-1">Avg Reply Time</p>
+                {/* Top Emoji */}
+                <div className="bg-[#0D0D0F] rounded-xl p-3 border border-white/5 flex flex-col justify-between">
+                    <span className="text-2xl">{topEmoji}</span>
+                    <div>
+                        <p className="text-xs text-purple-400 font-semibold">{emojiCount.toLocaleString()}×</p>
+                        <p className="text-[9px] text-gray-500 uppercase">Top Emoji</p>
+                    </div>
                 </div>
-            </div>
 
-            {/* Stat 4: Start Date */}
-            <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-3xl p-6 border border-zinc-700/50 flex flex-col justify-between aspect-square hover:from-zinc-700 hover:to-zinc-800 transition-colors">
-                <Calendar className="w-6 h-6 text-blue-400" />
-                <div>
-                    <p className="text-sm font-heading font-bold text-white">{startDate}</p>
-                    <p className="text-xs text-zinc-500 uppercase mt-1">First Text</p>
+                {/* Days Together */}
+                <div className="bg-[#0D0D0F] rounded-xl p-3 border border-white/5">
+                    <div className="flex items-center gap-1 mb-1">
+                        <Clock className="w-3 h-3 text-green-400" />
+                    </div>
+                    <p className="text-xl font-bold text-white font-heading">{daysTogether.toLocaleString()}</p>
+                    <p className="text-[9px] text-gray-500 uppercase">Days Together</p>
+                </div>
+
+                {/* First Message */}
+                <div className="bg-[#0D0D0F] rounded-xl p-3 border border-white/5">
+                    <div className="flex items-center gap-1 mb-1">
+                        <Calendar className="w-3 h-3 text-blue-400" />
+                    </div>
+                    <p className="text-sm font-bold text-white font-heading">{startDate}</p>
+                    <p className="text-[9px] text-gray-500 uppercase">First Message</p>
                 </div>
             </div>
         </div>

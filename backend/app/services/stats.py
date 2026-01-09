@@ -37,6 +37,7 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
     
     # Accumulators
     emoji_counts: Dict[str, int] = defaultdict(int)
+    monthly_emoji_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     word_counts: Dict[str, int] = defaultdict(int)
     hourly_activity = [0] * 24
     link_counts: Dict[str, int] = defaultdict(int)
@@ -62,6 +63,7 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
         hour = date.hour
         day = date.weekday()  # Monday = 0
         day_key = date.strftime('%Y-%m-%d')
+        month_key = date.strftime('%Y-%m')
         
         # 1. Time & Streak
         hourly_activity[hour] += 1
@@ -76,6 +78,7 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
         emojis = EMOJI_REGEX.findall(msg.content)
         for e in emojis:
             emoji_counts[e] += 1
+            monthly_emoji_counts[month_key][e] += 1
         
         # 4. Links
         links = URL_REGEX.findall(msg.content)
@@ -120,6 +123,17 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
     word_cloud = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:60]
     top_links = sorted(link_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     
+    # Process monthly emojis
+    # Structure: [{'date': '2023-01', 'emojis': [{'emoji': '😂', 'count': 42}, ...]}, ...]
+    timeline_emojis = []
+    for month_key in sorted(monthly_emoji_counts.keys()):
+        # Get top 3 emojis for this month
+        month_top = sorted(monthly_emoji_counts[month_key].items(), key=lambda x: x[1], reverse=True)[:5]
+        timeline_emojis.append({
+            'date': month_key,
+            'emojis': [{'emoji': e, 'count': c} for e, c in month_top]
+        })
+
     # Timeline (sorted by date)
     timeline = [{'date': k, 'count': v} for k, v in sorted(active_days.items())]
     
@@ -174,6 +188,7 @@ def compute_stats(messages: List[ParsedMessage]) -> Dict[str, Any]:
         'startDate': messages[0].timestamp.isoformat(),
         'endDate': messages[-1].timestamp.isoformat(),
         'topEmojis': [{'emoji': e, 'count': c} for e, c in top_emojis],
+        'monthlyEmojis': timeline_emojis,
         'hourlyActivity': hourly_activity,
         'wordCloud': [{'text': w, 'value': c} for w, c in word_cloud],
         'streak': {

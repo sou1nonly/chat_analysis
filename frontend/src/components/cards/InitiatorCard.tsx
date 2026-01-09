@@ -3,6 +3,7 @@
 import { useOrbitStore } from "@/store/useOrbitStore";
 import { useSearch } from "@/hooks/useSearch";
 import EvidencePopover from "@/components/ui/EvidencePopover";
+import { MessageSquareMore } from "lucide-react";
 
 export default function InitiatorCard() {
     const { stats } = useOrbitStore();
@@ -10,54 +11,60 @@ export default function InitiatorCard() {
 
     if (!stats || !stats.initiators) return null;
 
-    const initiators = stats.initiators; // { name: string, count: number }[]
+    const initiators = stats.initiators;
     const totalInitiations = initiators.reduce((acc, curr) => acc + curr.count, 0) || 1;
 
     const handleClick = (name: string) => {
-        // Search for messages from this sender (as evidence of their initiation)
         search({ sender: name }, `${name}'s Initiations`);
     };
 
+    const colors = [
+        { bar: "bg-pink-500", text: "text-pink-400" },
+        { bar: "bg-purple-500", text: "text-purple-400" },
+    ];
+
     return (
         <>
-            <div className="bg-zinc-900 rounded-3xl p-6 border border-zinc-800 relative overflow-hidden flex flex-col justify-between h-full">
-                <div className="relative z-10 mb-2">
-                    <h3 className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Dynamics</h3>
-                    <p className="text-white text-xl font-heading font-medium">The Opener</p>
-                    <p className="text-zinc-500 text-xs mt-1">Who starts the conversation? (click to see)</p>
+            <div className="h-full flex flex-col min-h-[220px]">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                        <MessageSquareMore className="w-4 h-4 text-pink-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-white font-semibold text-sm">The Opener</h3>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-wider">Conversation Starters</p>
+                    </div>
                 </div>
 
-                <div className="space-y-4 relative z-10">
-                    {initiators.slice(0, 3).map((person, i) => {
+                {/* Bars */}
+                <div className="space-y-4 flex-1">
+                    {initiators.slice(0, 2).map((person, i) => {
                         const percent = Math.round((person.count / totalInitiations) * 100);
+                        const color = colors[i % colors.length];
+
                         return (
                             <div
                                 key={person.name}
-                                className="group cursor-pointer"
+                                className="cursor-pointer group"
                                 onClick={() => handleClick(person.name)}
                             >
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className={`font-bold ${i === 0 ? 'text-purple-400' : 'text-zinc-300'}`}>
+                                <div className="flex justify-between text-xs mb-1.5">
+                                    <span className={`font-medium ${color.text}`}>
                                         {person.name}
                                     </span>
-                                    <span className="text-zinc-500">{percent}%</span>
+                                    <span className="text-white font-semibold">{percent}%</span>
                                 </div>
-                                <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
                                     <div
-                                        className={`h-full rounded-full transition-all duration-1000 ease-out group-hover:opacity-80 ${i === 0 ? 'bg-purple-500' : 'bg-zinc-600'}`}
+                                        className={`h-full rounded-full ${color.bar} transition-all duration-500`}
                                         style={{ width: `${percent}%` }}
                                     />
                                 </div>
-                                <p className="text-[10px] text-zinc-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    Ignited {person.count} conversations → Click to see
-                                </p>
                             </div>
                         );
                     })}
                 </div>
-
-                {/* Decor */}
-                <div className="absolute bottom-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
             </div>
 
             <EvidencePopover

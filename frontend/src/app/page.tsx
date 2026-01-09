@@ -1,100 +1,104 @@
 "use client";
 
-import { useState } from "react";
 import FileDrop from "@/components/ui/FileDrop";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { useOrbitStore } from "@/store/useOrbitStore";
 import { useRouter } from "next/navigation";
-import api from "@/lib/api";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 
 export default function Home() {
-  const { status, progress, setStatus, setProgress, setStats, setUploadId } = useOrbitStore();
+  const { status, progress, stats } = useOrbitStore();
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>("");
 
-  const handleFileUpload = async (file: File) => {
-    setError(null);
-    setStatus("parsing", "Uploading file...");
-    setProgress(10);
-
-    try {
-      // Simulate progress while uploading
-      const progressInterval = setInterval(() => {
-        setProgress((prev: number) => Math.min(prev + 5, 80));
-      }, 300);
-
-      // Upload to backend
-      const response = await api.uploadFile(file);
-
-      clearInterval(progressInterval);
-      setProgress(90);
-
-      // Store stats and upload ID
-      // Convert date strings to Date objects for compatibility
-      const stats = {
-        ...response.stats,
-        startDate: new Date(response.stats.startDate),
-        endDate: new Date(response.stats.endDate),
-      };
-
-      setStats(stats);
-      setUploadId(response.upload_id);
-      setStatus("complete", "Analysis complete.");
-      setProgress(100);
-
-      // Navigate to report
-      setTimeout(() => {
-        router.push("/report");
-      }, 1000);
-
-    } catch (err: any) {
-      setStatus("error", err.message || "Failed to process file");
-      setError(err.message);
+  useEffect(() => {
+    if (stats && status === "complete") {
+      router.push("/report");
     }
-  };
+  }, [stats, status, router]);
+
+  useEffect(() => {
+    switch (status) {
+      case "parsing":
+        setStatusMessage("Parsing your chat...");
+        break;
+      case "cleaning":
+        setStatusMessage("Cleaning data...");
+        break;
+      case "analyzing":
+        setStatusMessage("AI is thinking...");
+        break;
+      default:
+        setStatusMessage("");
+    }
+  }, [status]);
+
+  const isProcessing = status === "parsing" || status === "cleaning";
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
-      {/* Background Ambience */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] bg-pink-500/10 blur-[100px] rounded-full pointer-events-none" />
+    <main className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#050507] relative overflow-hidden">
+      {/* Subtle ambient glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-4xl mx-auto text-center space-y-12 relative z-10">
-        <div className="space-y-4">
-          <h1 className="text-6xl md:text-8xl font-heading font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-zinc-200 to-zinc-600">
-            Orbit.
-          </h1>
-          <p className="text-zinc-400 text-lg md:text-xl font-light tracking-wide">
-            The Relationship Zine
-          </p>
+      {/* Logo */}
+      <motion.div
+        className="text-center mb-10"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <h1 className="text-5xl md:text-6xl font-heading font-bold text-white mb-2 tracking-tight">
+          Orbit<span className="text-purple-400">.</span>
+        </h1>
+        <p className="text-gray-500 text-sm tracking-wide">
+          The Relationship Zine
+        </p>
+      </motion.div>
+
+      {/* Main Content */}
+      <motion.div
+        className="w-full max-w-lg"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        {isProcessing ? (
+          <ProgressBar progress={progress} status={statusMessage} />
+        ) : (
+          <FileDrop />
+        )}
+      </motion.div>
+
+      {/* Platform Badges */}
+      <motion.div
+        className="flex items-center gap-6 mt-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-xs text-gray-500">WhatsApp</span>
+          <span className="text-[10px] text-gray-600">(.txt)</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-pink-500" />
+          <span className="text-xs text-gray-500">Instagram</span>
+          <span className="text-[10px] text-gray-600">(.json)</span>
+        </div>
+      </motion.div>
 
-        {status === "idle" && <FileDrop onFileSelect={handleFileUpload} />}
-
-        {(status === "parsing" || status === "cleaning" || status === "analyzing") && (
-          <ProgressBar progress={progress} status={status} />
-        )}
-
-        {status === "complete" && (
-          <div className="text-white animate-pulse">
-            <p className="text-2xl font-heading">Complete!</p>
-            <p className="text-zinc-400">Opening your zine...</p>
-          </div>
-        )}
-
-        {status === "error" && error && (
-          <div className="text-red-400 space-y-4">
-            <p className="text-xl">Something went wrong</p>
-            <p className="text-sm">{error}</p>
-            <button
-              onClick={() => setStatus("idle", null)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition"
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Footer */}
+      <motion.div
+        className="absolute bottom-6 flex items-center gap-1 text-[10px] text-gray-600"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Sparkles className="w-3 h-3 text-purple-400" />
+        <span>AI-powered insights</span>
+      </motion.div>
     </main>
   );
 }

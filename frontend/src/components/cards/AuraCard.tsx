@@ -1,57 +1,121 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useOrbitStore } from "@/store/useOrbitStore";
+import { Heart, Smile, Frown, Meh } from "lucide-react";
 
 export default function AuraCard() {
     const { stats } = useOrbitStore();
 
     if (!stats) return null;
 
-    // Simple heuristic for MVP: Check top emojis for "vibe"
-    const topEmoji = stats.topEmojis[0]?.emoji || "";
-    const happyEmojis = ["😂", "🤣", "❤️", "🥰", "😊", "✨"];
-    const sentiment = happyEmojis.includes(topEmoji) ? "Radiant" : "Mysterious";
+    // Calculate sentiment from available data if aura doesn't exist
+    let sentiment = 0;
+    let label = "Neutral";
 
-    // Dynamic gradient based on sentiment
-    const gradient = sentiment === "Radiant"
-        ? "from-yellow-400 via-orange-500 to-red-500"
-        : "from-indigo-500 via-purple-500 to-pink-500";
+    if (stats.aura) {
+        sentiment = stats.aura.sentiment;
+        label = stats.aura.label;
+    } else {
+        // Fallback: derive from emoji sentiment
+        const positiveEmojis = ['😊', '😂', '❤️', '🥰', '😍', '💕', '🎉', '😁', '👍', '💖'];
+        const negativeEmojis = ['😢', '😭', '😞', '💔', '😔', '😤', '😡', '👎'];
+
+        let positive = 0;
+        let negative = 0;
+
+        stats.topEmojis?.forEach(e => {
+            if (positiveEmojis.includes(e.emoji)) positive += e.count;
+            if (negativeEmojis.includes(e.emoji)) negative += e.count;
+        });
+
+        const total = positive + negative || 1;
+        sentiment = (positive - negative) / total;
+
+        if (sentiment > 0.3) label = "Positive";
+        else if (sentiment > 0) label = "Warm";
+        else if (sentiment > -0.3) label = "Neutral";
+        else label = "Tense";
+    }
+
+    const normalizedSentiment = ((sentiment + 1) / 2) * 100;
+
+    // Color and icon based on sentiment
+    const getConfig = () => {
+        if (sentiment > 0.3) return {
+            ring: "stroke-green-400",
+            text: "text-green-400",
+            Icon: Smile,
+            gradient: "from-green-500/20 to-emerald-500/10"
+        };
+        if (sentiment > 0) return {
+            ring: "stroke-blue-400",
+            text: "text-blue-400",
+            Icon: Heart,
+            gradient: "from-blue-500/20 to-cyan-500/10"
+        };
+        if (sentiment > -0.3) return {
+            ring: "stroke-yellow-400",
+            text: "text-yellow-400",
+            Icon: Meh,
+            gradient: "from-yellow-500/20 to-amber-500/10"
+        };
+        return {
+            ring: "stroke-orange-400",
+            text: "text-orange-400",
+            Icon: Frown,
+            gradient: "from-orange-500/20 to-red-500/10"
+        };
+    };
+
+    const config = getConfig();
+    const { Icon } = config;
+    const radius = 32;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (normalizedSentiment / 100) * circumference;
 
     return (
-        <div className="w-full aspect-square rounded-3xl overflow-hidden relative shadow-2xl bg-zinc-900 group">
-            {/* Animated blob background */}
-            <motion.div
-                className={`absolute inset-0 bg-gradient-to-tr ${gradient} opacity-80 blur-[80px]`}
-                animate={{
-                    scale: [1, 1.2, 1],
-                    rotate: [0, 90, 0],
-                }}
-                transition={{
-                    duration: 10,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                }}
-            />
+        <div className="h-full flex flex-col items-center justify-center relative min-h-[180px]">
+            {/* Subtle gradient bg */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} rounded-xl`} />
 
-            {/* Content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center z-10">
-                <h2 className="text-4xl font-heading font-bold text-white mb-4">
-                    You are <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
-                        {sentiment}
-                    </span>
-                </h2>
+            {/* Ring */}
+            <div className="relative z-10">
+                <div className="relative w-20 h-20">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
+                        {/* Background ring */}
+                        <circle
+                            cx="40"
+                            cy="40"
+                            r={radius}
+                            stroke="rgba(255,255,255,0.1)"
+                            strokeWidth="5"
+                            fill="transparent"
+                        />
+                        {/* Progress ring */}
+                        <circle
+                            cx="40"
+                            cy="40"
+                            r={radius}
+                            className={config.ring}
+                            strokeWidth="5"
+                            fill="transparent"
+                            strokeLinecap="round"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={offset}
+                            style={{ transition: "stroke-dashoffset 0.8s ease-out" }}
+                        />
+                    </svg>
 
-                <div className="bg-black/20 backdrop-blur-md px-6 py-3 rounded-full border border-white/10">
-                    <p className="text-white/90 text-sm font-medium">
-                        Based on {stats.topEmojis[0]?.emoji || "?"} usage
-                    </p>
+                    {/* Center icon */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Icon className={`w-6 h-6 ${config.text}`} />
+                    </div>
                 </div>
             </div>
 
-            {/* Noise Texture Overlay */}
-            <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none mix-blend-overlay" />
+            {/* Label */}
+            <p className="text-white font-semibold mt-3 text-sm relative z-10">{label}</p>
+            <p className="text-[9px] text-gray-500 uppercase relative z-10">Vibe Check</p>
         </div>
     );
 }

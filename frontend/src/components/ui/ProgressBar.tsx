@@ -1,21 +1,22 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
-import { clsx } from "clsx";
+import { Loader2 } from "lucide-react";
 
 interface ProgressBarProps {
-    progress: number; // 0-100
+    progress: number;
     status: string;
 }
 
 const FACTS = [
-    "Did you know? You text most on Tuesdays.",
-    "Analyzing the vibe...",
-    "Filtering out 4,000 'lol's...",
-    "Calculating emotional velocity...",
-    "Finding your most used emoji...",
-    "Detecting sarcasm...",
+    "Analyzing conversation patterns...",
+    "Detecting emotional wavelengths...",
+    "Counting your emojis...",
+    "Finding your vibe...",
+    "Mapping activity heatmaps...",
+    "Calculating reply speeds...",
+    "Identifying streaks...",
 ];
 
 export default function ProgressBar({ progress, status }: ProgressBarProps) {
@@ -29,35 +30,46 @@ export default function ProgressBar({ progress, status }: ProgressBarProps) {
     }, []);
 
     return (
-        <div className="w-full max-w-md mx-auto space-y-4">
-            <div className="flex justify-between text-xs uppercase tracking-widest text-zinc-500 font-medium font-sans">
-                <span>{status}</span>
-                <span>{Math.round(progress)}%</span>
+        <div className="w-full max-w-sm mx-auto space-y-6 py-8">
+            {/* Spinner */}
+            <div className="flex justify-center">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                >
+                    <Loader2 className="w-8 h-8 text-purple-400" />
+                </motion.div>
             </div>
 
-            <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden relative">
-                <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ ease: "linear", duration: 0.5 }}
-                    className="h-full bg-gradient-energy absolute top-0 left-0"
-                />
-                {/* Glow effect */}
-                <motion.div
-                    animate={{ left: `${progress}%` }}
-                    className="absolute top-0 w-20 h-full bg-white/50 blur-md -translate-x-full"
-                />
+            {/* Progress Bar */}
+            <div className="space-y-2">
+                <div className="h-1.5 w-full bg-[#2C2C2E] rounded-full overflow-hidden">
+                    <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ ease: "easeOut", duration: 0.3 }}
+                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                    />
+                </div>
+
+                <div className="flex justify-between text-xs text-[#636366]">
+                    <span className="capitalize">{status}</span>
+                    <span className="font-mono">{Math.round(progress)}%</span>
+                </div>
             </div>
 
-            <motion.p
-                key={fact}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="text-center text-zinc-400 text-sm italic"
-            >
-                "{fact}"
-            </motion.p>
+            {/* Rotating Fact */}
+            <AnimatePresence mode="wait">
+                <motion.p
+                    key={fact}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="text-center text-[#8E8E93] text-sm"
+                >
+                    {fact}
+                </motion.p>
+            </AnimatePresence>
         </div>
     );
 }

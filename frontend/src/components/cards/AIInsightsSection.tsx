@@ -23,24 +23,27 @@ function InsightCard({
 }) {
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.5, delay }}
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/50 backdrop-blur-xl p-5 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay }}
+            className="group relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0A0A0B]/60 backdrop-blur-xl p-6 cursor-pointer hover:border-white/[0.15] hover:bg-[#0A0A0B]/80 transition-all duration-300"
         >
-            {/* Gradient accent */}
-            <div className={`absolute top-0 left-0 right-0 h-1 ${gradient}`} />
+            {/* Spot Gradient Background */}
+            <div className={`absolute -top-20 -right-20 w-40 h-40 ${gradient.replace('bg-', '')} opacity-10 blur-[50px] group-hover:opacity-20 transition-opacity duration-500 rounded-full`} />
+
+            {/* Accent Line */}
+            <div className={`absolute top-0 left-6 right-6 h-[1px] ${gradient} opacity-50`} />
 
             {/* Header */}
-            <div className="flex items-center gap-3 mb-4">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${gradient}`}>
-                    <Icon className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-4 mb-5 relative z-10">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${gradient.replace('bg-gradient-to-r', 'bg-gradient-to-br')} shadow-lg shadow-black/20 group-hover:scale-110 transition-transform duration-300`}>
+                    <Icon className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wide">{title}</h3>
+                <h3 className="text-sm font-bold text-white tracking-wide">{title}</h3>
             </div>
 
             {/* Content */}
-            <div className="space-y-3">
+            <div className="space-y-4 relative z-10">
                 {children}
             </div>
         </motion.div>
@@ -64,17 +67,17 @@ function InsightText({ label, value }: { label: string; value: string | object }
 
 function ScoreBar({ label, score, color }: { label: string; score: number; color: string }) {
     return (
-        <div className="space-y-1.5">
-            <div className="flex justify-between text-xs">
+        <div className="space-y-2 pt-1">
+            <div className="flex justify-between text-[11px] font-medium tracking-wide">
                 <span className="text-zinc-500">{label}</span>
-                <span className="text-zinc-300 font-medium">{score}%</span>
+                <span className="text-white">{score}%</span>
             </div>
-            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                 <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${score}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
-                    className={`h-full rounded-full ${color}`}
+                    className={`h-full rounded-full ${color} shadow-[0_0_10px_rgba(168,85,247,0.4)]`}
                 />
             </div>
         </div>
@@ -372,20 +375,20 @@ export default function AIInsightsSection() {
                 {/* Section header */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-                            <Brain className="w-5 h-5 text-white" />
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center">
+                            <Brain className="w-5 h-5 text-purple-400" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white">AI Insights</h2>
-                            <p className="text-xs text-zinc-500">Powered by Ollama • qwen2.5</p>
+                            <h2 className="text-xl font-heading font-bold text-white">AI Insights</h2>
+                            <p className="text-[10px] text-[#636366] uppercase tracking-widest">Deep pattern analysis</p>
                         </div>
                     </div>
 
                     {/* Metadata badge */}
                     {metadata && (
-                        <div className="hidden md:flex items-center gap-2 bg-zinc-800/50 px-3 py-1.5 rounded-full border border-zinc-700/50">
-                            <span className="text-xs text-zinc-400">
-                                Analyzed {metadata.messages_analyzed?.toLocaleString()} of {metadata.total_messages?.toLocaleString()} messages
+                        <div className="hidden md:flex items-center gap-2 bg-[#1C1C1E] px-3 py-2 rounded-full border border-white/[0.06]">
+                            <span className="text-xs text-[#8E8E93]">
+                                {metadata.messages_analyzed?.toLocaleString()} messages analyzed
                             </span>
                         </div>
                     )}

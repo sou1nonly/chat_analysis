@@ -3,10 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 // Types inline to avoid import issues after migration
 export interface GlobalStats {
+    aura: any;
     totalMessages: number;
     startDate: Date;
     endDate: Date;
     topEmojis: { emoji: string; count: number }[];
+    monthlyEmojis: { date: string; emojis: { emoji: string; count: number }[] }[];
     hourlyActivity: number[];
     wordCloud: { text: string; value: number }[];
     streak: {

@@ -1,94 +1,90 @@
 "use client";
 
 import { useOrbitStore } from "@/store/useOrbitStore";
+import { Grid3X3 } from "lucide-react";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function ActivityHeatmapCard() {
-    const { stats, setActiveCard } = useOrbitStore();
+    const { stats } = useOrbitStore();
 
     if (!stats || !stats.heatmap) return null;
 
-    const heatmap = stats.heatmap; // 7x24 array
+    const heatmap = stats.heatmap;
 
     // Find max value for normalization
     let maxVal = 0;
     heatmap.forEach(day => day.forEach(val => {
         if (val > maxVal) maxVal = val;
     }));
-
-    // Prevent divide by zero
     maxVal = maxVal || 1;
 
-    // Helper for color intensity
+    // Purple gradient intensity
     const getIntensity = (val: number) => {
-        if (val === 0) return "bg-zinc-800/50";
-        const intensity = Math.ceil((val / maxVal) * 10); // 1-10 scale
-        // Purple shades mapping
-        if (intensity <= 2) return "bg-pink-500/20";
-        if (intensity <= 4) return "bg-pink-500/40";
-        if (intensity <= 7) return "bg-purple-500/60";
-        return "bg-indigo-500";
+        if (val === 0) return "bg-purple-500/5";
+        const intensity = val / maxVal;
+        if (intensity <= 0.2) return "bg-purple-500/20";
+        if (intensity <= 0.4) return "bg-purple-500/40";
+        if (intensity <= 0.6) return "bg-purple-500/60";
+        if (intensity <= 0.8) return "bg-purple-400/80";
+        return "bg-purple-400";
     };
 
     return (
-        <div
-            onClick={() => setActiveCard('heatmap')}
-            className="bg-zinc-900 rounded-3xl p-6 border border-zinc-800 relative overflow-hidden flex flex-col h-full cursor-pointer hover:border-zinc-700 transition-colors group"
-        >
-            {/* Expand Hint */}
-            <div className="absolute top-4 right-4 text-[9px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                Click to expand →
-            </div>
-
-            <div className="mb-4 z-10 flex justify-between items-end">
-                <div>
-                    <h3 className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Habits</h3>
-                    <p className="text-white text-xl font-heading font-medium">Activity Heatmap</p>
+        <div className="h-full flex flex-col min-h-[200px]">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                        <Grid3X3 className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-white font-semibold text-sm">Activity Heatmap</h3>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-wider">When You Chat</p>
+                    </div>
                 </div>
-                <div className="flex gap-2 text-[10px] text-zinc-500 items-center">
+
+                {/* Legend */}
+                <div className="flex items-center gap-1 text-[9px] text-gray-500">
                     <span>Less</span>
-                    <div className="w-2 h-2 bg-zinc-800/50 rounded-sm" />
-                    <div className="w-2 h-2 bg-purple-900/40 rounded-sm" />
-                    <div className="w-2 h-2 bg-purple-600/80 rounded-sm" />
-                    <div className="w-2 h-2 bg-purple-400 rounded-sm" />
+                    <div className="w-3 h-3 rounded bg-purple-500/10" />
+                    <div className="w-3 h-3 rounded bg-purple-500/40" />
+                    <div className="w-3 h-3 rounded bg-purple-400" />
                     <span>More</span>
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col justify-center gap-1 overflow-x-auto z-10">
-                <div className="flex">
-                    <div className="w-8 shrink-0" /> {/* Y-axis Label Spacer */}
-                    <div className="flex flex-1 justify-between px-1">
-                        {/* X-axis Labels (every 4 hours) */}
-                        {HOURS.filter(h => h % 4 === 0).map(h => (
-                            <span key={h} className="text-[9px] text-zinc-600 font-mono">
-                                {h.toString().padStart(2, '0')}:00
-                            </span>
-                        ))}
-                    </div>
+            {/* X-axis labels */}
+            <div className="flex pl-10 mb-1">
+                <div className="flex flex-1 justify-between text-[8px] text-gray-600 px-1">
+                    <span>00</span>
+                    <span>06</span>
+                    <span>12</span>
+                    <span>18</span>
+                    <span>24</span>
                 </div>
+            </div>
 
+            {/* Heatmap Grid */}
+            <div className="flex-1 flex flex-col gap-[3px]">
                 {DAYS.map((day, dIndex) => (
-                    <div key={day} className="flex items-center gap-1 h-full">
-                        <span className="text-[9px] text-zinc-600 font-mono w-8 shrink-0">{day}</span>
-                        {HOURS.map((hour) => {
-                            const val = heatmap[dIndex][hour];
-                            return (
-                                <div
-                                    key={`${day}-${hour}`}
-                                    className={`flex-1 h-4 rounded-sm transition-all duration-300 ${getIntensity(val)}`}
-                                    title={`${day} @ ${hour}:00 - ${val} messages`}
-                                />
-                            );
-                        })}
+                    <div key={day} className="flex items-center gap-2">
+                        <span className="text-[9px] text-gray-500 w-8 shrink-0 text-right">{day}</span>
+                        <div className="flex gap-[2px] flex-1">
+                            {Array.from({ length: 24 }, (_, hour) => {
+                                const val = heatmap[dIndex]?.[hour] || 0;
+                                return (
+                                    <div
+                                        key={`${day}-${hour}`}
+                                        className={`flex-1 aspect-square rounded-sm ${getIntensity(val)} hover:ring-1 hover:ring-purple-400/50 transition-all cursor-pointer min-w-[8px]`}
+                                        title={`${day} ${hour}:00 - ${val} msgs`}
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
                 ))}
             </div>
-
-            {/* Decor */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
         </div>
     );
 }

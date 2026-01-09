@@ -1,33 +1,125 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #121212;
-  --color-foreground: #FFFFFF;
-  --color-zinc-950: #09090b;
-  --color-zinc-400: #A1A1AA;
+  /* ===== ORBIT DESIGN SYSTEM v3 - VIBRANT NEON ===== */
 
-  --background-image-gradient-aura: linear-gradient(135deg, #ff6b6b, #f06595, #845ef7);
-  --background-image-gradient-deep: linear-gradient(135deg, #2e1065, #7c3aed, #db2777);
-  --background-image-gradient-energy: linear-gradient(135deg, #f59e0b, #ea580c, #db2777);
-  
+  /* Surface Colors - Jet Black Theme */
+  --color-surface-primary: #0D0D0F;
+  --color-surface-secondary: #141418;
+  --color-surface-tertiary: #1A1A1F;
+  --color-surface-card: #111114;
+
+  /* Background */
+  --color-background: #050507;
+  --color-foreground: #FFFFFF;
+
+  /* VIBRANT Accent Colors */
+  --color-accent-purple: #A855F7;
+  --color-accent-purple-bright: #C084FC;
+  --color-accent-green: #4ADE80;
+  --color-accent-green-bright: #86EFAC;
+  --color-accent-pink: #F472B6;
+  --color-accent-blue: #60A5FA;
+  --color-accent-orange: #FB923C;
+  --color-accent-yellow: #FACC15;
+  --color-accent-cyan: #22D3EE;
+
+  /* Text Colors */
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted: #6B7280;
+
+  /* Border Colors */
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(168, 85, 247, 0.3);
+
+  /* Gradients */
+  --background-image-gradient-purple: linear-gradient(135deg, #A855F7, #7C3AED);
+  --background-image-gradient-green: linear-gradient(135deg, #4ADE80, #22C55E);
+  --background-image-gradient-pink: linear-gradient(135deg, #F472B6, #EC4899);
+  --background-image-gradient-sunset: linear-gradient(135deg, #FB923C, #F472B6);
+  --background-image-gradient-neon: linear-gradient(135deg, #A855F7, #22D3EE);
+
+  /* Typography */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows with glow */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-glow-purple: 0 0 30px rgba(168, 85, 247, 0.15);
+  --shadow-glow-green: 0 0 30px rgba(74, 222, 128, 0.15);
 }
 
 @layer base {
+  * {
+    border-color: var(--color-border-subtle);
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-heading);
+    letter-spacing: -0.02em;
   }
 }
 
-@utility text-balance {
-  text-wrap: balance;
+@layer components {
+
+  /* Card Base */
+  .card {
+    background-color: var(--color-surface-card);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
+  }
+
+  .card-hover:hover {
+    border-color: var(--color-border-hover);
+    box-shadow: var(--shadow-glow-purple);
+  }
+
+  /* Neon text glow */
+  .neon-purple {
+    color: #A855F7;
+    text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+  }
+
+  .neon-green {
+    color: #4ADE80;
+    text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 300ms ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
 }

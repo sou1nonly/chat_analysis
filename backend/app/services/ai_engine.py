@@ -109,7 +109,7 @@ class AIEngine:
     """Ollama-based AI analysis engine with improved prompts."""
     
     _instance: Optional["AIEngine"] = None
-    _model_name: str = "qwen2.5:0.5b"
+    _model_name: str = "deepseek-v3.1:671b-cloud"
     _ready: bool = False
     
     def __new__(cls):
