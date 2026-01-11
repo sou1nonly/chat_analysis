@@ -113,64 +113,88 @@ class HierarchicalSummarizer:
     Pipeline: Raw Messages → Preprocessed → Weekly AI → Monthly AI → Yearly AI
     """
     
-    def __init__(self, messages: List[Dict[str, Any]]):
+    def __init__(self, messages: List[Dict[str, Any]], upload_id: int = None):
         self.raw_messages = messages
+        self.upload_id = upload_id
         self.preprocessed: List[Dict[str, Any]] = []
         self.weekly_buckets: List[WeekBucket] = []
         self.monthly_summaries: List[MonthSummary] = []
         self.yearly_summaries: List[YearSummary] = []
         self.participants: List[str] = []
+        self._cancellation_token = None
+        self._log_callback = None
         
-    def run_pipeline(self) -> Dict[str, Any]:
+    def _log(self, message: str):
+        """Log message and broadcast to subscribers."""
+        print(message)
+        if self._log_callback:
+            self._log_callback(message)
+    
+    def _check_cancelled(self):
+        """Check if task was cancelled and raise exception if so."""
+        if self._cancellation_token and self._cancellation_token.is_cancelled:
+            raise TaskCancelledException(f"Task cancelled for upload {self.upload_id}")
+    
+    def run_pipeline(self, cancellation_token=None, log_callback=None) -> Dict[str, Any]:
         """Run the full hierarchical AI summarization pipeline."""
+        from app.services.task_manager import TaskCancelledException
+        
+        self._cancellation_token = cancellation_token
+        self._log_callback = log_callback
+        
         import time
         start_time = time.time()
         
-        print("=" * 60)
-        print("[PIPELINE] Starting Hierarchical AI Summarization")
-        print(f"[INFO] Total messages: {len(self.raw_messages)}")
-        print("=" * 60)
+        self._log("=" * 60)
+        self._log("[PIPELINE] Starting Hierarchical AI Summarization")
+        self._log(f"[INFO] Total messages: {len(self.raw_messages)}")
+        self._log("=" * 60)
         
         # Step 1: Preprocess (~5 seconds)
+        self._check_cancelled()
         step_start = time.time()
-        print("\n[1/5] Preprocessing messages...")
+        self._log("\n[1/5] Preprocessing messages...")
         self.preprocessed = preprocess_all_messages(self.raw_messages)
         self.participants = list(set(m.get('sender', 'Unknown') for m in self.preprocessed))
         self.participants.sort()
-        print(f"      Done in {time.time() - step_start:.1f}s")
-        print(f"      Participants: {', '.join(self.participants)}")
+        self._log(f"      Done in {time.time() - step_start:.1f}s")
+        self._log(f"      Participants: {', '.join(self.participants)}")
         
         # Step 2: Create weekly buckets and AI summaries (~2-3 min)
+        self._check_cancelled()
         step_start = time.time()
-        print(f"\n[2/5] Generating weekly AI summaries (100 msgs/week)...")
-        print(f"      Estimated time: 3-5 minutes")
+        self._log(f"\n[2/5] Generating weekly AI summaries (75 msgs/week)...")
+        self._log(f"      Estimated time: 3-5 minutes")
         self._create_weekly_buckets_with_ai()
-        print(f"      Done in {time.time() - step_start:.1f}s")
-        print(f"      Generated {len(self.weekly_buckets)} weekly summaries")
+        self._log(f"      Done in {time.time() - step_start:.1f}s")
+        self._log(f"      Generated {len(self.weekly_buckets)} weekly summaries")
         
         # Step 3: Monthly summaries from weekly AI (~30 sec)
+        self._check_cancelled()
         step_start = time.time()
-        print(f"\n[3/5] Synthesizing monthly summaries from weekly...")
+        self._log(f"\n[3/5] Synthesizing monthly summaries from weekly...")
         self._create_monthly_summaries_from_weekly()
-        print(f"      Done in {time.time() - step_start:.1f}s")
-        print(f"      Generated {len(self.monthly_summaries)} monthly summaries")
+        self._log(f"      Done in {time.time() - step_start:.1f}s")
+        self._log(f"      Generated {len(self.monthly_summaries)} monthly summaries")
         
         # Step 4: Yearly summaries from monthly AI (~15 sec)
+        self._check_cancelled()
         step_start = time.time()
-        print(f"\n[4/5] Synthesizing yearly summaries from monthly...")
+        self._log(f"\n[4/5] Synthesizing yearly summaries from monthly...")
         self._create_yearly_summaries_with_ai()
-        print(f"      Done in {time.time() - step_start:.1f}s")
-        print(f"      Generated {len(self.yearly_summaries)} yearly summaries")
+        self._log(f"      Done in {time.time() - step_start:.1f}s")
+        self._log(f"      Generated {len(self.yearly_summaries)} yearly summaries")
         
         # Step 5: Build context
+        self._check_cancelled()
         step_start = time.time()
-        print(f"\n[5/5] Building AI context...")
+        self._log(f"\n[5/5] Building AI context...")
         
         total_time = time.time() - start_time
-        print("\n" + "=" * 60)
-        print(f"[OK] Pipeline complete in {total_time:.1f}s ({total_time/60:.1f} min)")
-        print(f"     {len(self.weekly_buckets)} weeks → {len(self.monthly_summaries)} months → {len(self.yearly_summaries)} years")
-        print("=" * 60)
+        self._log("\n" + "=" * 60)
+        self._log(f"[OK] Pipeline complete in {total_time:.1f}s ({total_time/60:.1f} min)")
+        self._log(f"     {len(self.weekly_buckets)} weeks → {len(self.monthly_summaries)} months → {len(self.yearly_summaries)} years")
+        self._log("=" * 60)
         
         return {
             "participants": self.participants,
@@ -192,11 +216,14 @@ class HierarchicalSummarizer:
         total_weeks = len(sorted_weeks)
         
         for idx, week_id in enumerate(sorted_weeks):
+            # Check cancellation before each week
+            self._check_cancelled()
+            
             msgs = weeks[week_id]
             
             # Progress indicator
             if (idx + 1) % 10 == 0 or idx == 0:
-                print(f"      Week {idx + 1}/{total_weeks}: {week_id}")
+                self._log(f"      Week {idx + 1}/{total_weeks}: {week_id}")
             
             # Calculate stats
             sentiments = [m['sentiment'] for m in msgs if m.get('sentiment', 0) != 0]
@@ -243,14 +270,14 @@ class HierarchicalSummarizer:
         try:
             import ollama
             
-            # Sample up to 100 meaningful messages
+            # Sample up to 75 meaningful messages
             meaningful_msgs = [
                 m for m in messages 
                 if m.get('classification') in ['statement', 'question'] 
                 and len(m.get('content', '')) > 10
             ]
             
-            sample_size = min(100, len(meaningful_msgs))
+            sample_size = min(75, len(meaningful_msgs))
             if sample_size < 3:
                 return f"A quiet week with {len(messages)} messages."
             

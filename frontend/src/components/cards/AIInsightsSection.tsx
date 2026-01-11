@@ -1,11 +1,12 @@
 "use client";
 
 import { useOrbitStore, AIInsights } from "@/store/useOrbitStore";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Brain, MessageSquare, Heart, Users, BarChart3, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import InsightsDisplay from "./InsightsDisplay";
+import LogTerminal from "@/components/ui/LogTerminal";
 
 // Individual insight card components
 function InsightCard({
@@ -85,16 +86,26 @@ function ScoreBar({ label, score, color }: { label: string; score: number; color
 }
 
 function FlagBadge({ type, text }: { type: 'red' | 'green'; text: string }) {
+    const [isExpanded, setIsExpanded] = useState(false);
     const colors = type === 'red'
         ? 'bg-red-500/10 border-red-500/20 text-red-400'
         : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
     const emoji = type === 'red' ? '🚩' : '💚';
 
     return (
-        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs ${colors}`}>
+        <motion.div
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs cursor-pointer hover:opacity-80 transition-all ${colors}`}
+            layout
+        >
             <span>{emoji}</span>
-            <span className="truncate max-w-[200px]">{text}</span>
-        </div>
+            <motion.span
+                className={isExpanded ? '' : 'truncate max-w-[200px]'}
+                layout
+            >
+                {text}
+            </motion.span>
+        </motion.div>
     );
 }
 
@@ -275,18 +286,85 @@ export default function AIInsightsSection() {
         }>;
     } | null>(null);
     const [deepInsightsLoading, setDeepInsightsLoading] = useState(false);
+    const [pipelineLogs, setPipelineLogs] = useState<string[]>([]);
 
-    // Clear deep insights when upload changes
+    // Refs to prevent duplicate API calls and WebSocket management
+    const analysisStartedRef = useRef(false);
+    const deepInsightsStartedRef = useRef(false);
+    const wsRef = useRef<WebSocket | null>(null);
+
+    // WebSocket connection for task cancellation and log streaming
+    const connectWebSocket = (taskUploadId: number) => {
+        // Close existing connection
+        if (wsRef.current) {
+            wsRef.current.close();
+        }
+
+        const wsUrl = `ws://localhost:8000/ws/task/${taskUploadId}`;
+        console.log('[WS] Connecting to:', wsUrl);
+
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+            console.log('[WS] Connected to task', taskUploadId);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'log') {
+                    setPipelineLogs(prev => [...prev, data.message]);
+                } else if (data.type === 'complete') {
+                    console.log('[WS] Task complete');
+                }
+            } catch (e) {
+                console.error('[WS] Parse error:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('[WS] Disconnected from task', taskUploadId);
+            wsRef.current = null;
+        };
+
+        ws.onerror = (error) => {
+            console.error('[WS] Error:', error);
+        };
+    };
+
+    // Cleanup WebSocket on unmount (triggers backend cancellation)
     useEffect(() => {
+        return () => {
+            if (wsRef.current) {
+                console.log('[WS] Component unmounting, closing WebSocket to cancel task');
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }, []);
+
+    // Clear deep insights and reset refs when upload changes
+    useEffect(() => {
+        // Close existing WebSocket when upload changes
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        setPipelineLogs([]);
         setDeepInsights(null);
         setDeepInsightsLoading(false);
+        analysisStartedRef.current = false;
+        deepInsightsStartedRef.current = false;
     }, [uploadId]);
 
     // Trigger AI analysis when stats are ready
     useEffect(() => {
-        if (!uploadId || !stats || aiInsights || aiStatus === 'analyzing') {
+        // Use ref to prevent duplicate calls
+        if (!uploadId || !stats || aiInsights || analysisStartedRef.current) {
             return;
         }
+        analysisStartedRef.current = true;
 
         const runAnalysis = async () => {
             setAiStatus('analyzing');
@@ -340,16 +418,23 @@ export default function AIInsightsSection() {
         };
 
         runAnalysis();
-    }, [uploadId, stats, aiInsights, aiStatus]);
+    }, [uploadId, stats, aiInsights]);
 
     // Fetch deep hierarchical insights when AI analysis completes
     useEffect(() => {
-        if (!uploadId || !aiInsights || deepInsights || deepInsightsLoading) {
+        // Use ref to prevent duplicate calls
+        if (!uploadId || !aiInsights || deepInsightsStartedRef.current) {
             return;
         }
+        deepInsightsStartedRef.current = true;
 
         const fetchDeepInsights = async () => {
             setDeepInsightsLoading(true);
+            setPipelineLogs([]);
+
+            // Connect WebSocket for log streaming and cancellation
+            connectWebSocket(uploadId);
+
             try {
                 const response = await api.getDeepInsights(uploadId);
                 if (response.status === 'complete' && response.insights) {
@@ -363,7 +448,7 @@ export default function AIInsightsSection() {
         };
 
         fetchDeepInsights();
-    }, [uploadId, aiInsights, deepInsights, deepInsightsLoading]);
+    }, [uploadId, aiInsights]);
 
     const isLoading = aiStatus === 'preprocessing' || aiStatus === 'analyzing';
     const hasError = aiStatus === 'error';
@@ -508,7 +593,16 @@ export default function AIInsightsSection() {
 
                     {/* Deep Insights - Hierarchical Timeline */}
                     {(deepInsights || deepInsightsLoading) && (
-                        <div className="mt-8">
+                        <div className="mt-8 space-y-4">
+                            {/* Terminal logs during loading */}
+                            {deepInsightsLoading && (
+                                <LogTerminal
+                                    logs={pipelineLogs}
+                                    isLoading={deepInsightsLoading}
+                                    className="mb-4"
+                                />
+                            )}
+
                             <InsightsDisplay
                                 data={deepInsights}
                                 isLoading={deepInsightsLoading}

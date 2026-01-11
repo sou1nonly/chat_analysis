@@ -201,8 +201,10 @@ async def get_deep_insights(upload_id: int, db: Session = Depends(get_db)):
     """
     Get hierarchical timeline insights (weekly, monthly, yearly summaries).
     Uses the new HierarchicalSummarizer for temporal analysis.
+    Supports cancellation via TaskManager.
     """
     from app.services.hierarchical_summarizer import HierarchicalSummarizer
+    from app.services.task_manager import task_manager, TaskCancelledException
     
     # Get messages for this upload
     messages = db.query(Message).filter(
@@ -222,12 +224,29 @@ async def get_deep_insights(upload_id: int, db: Session = Depends(get_db)):
         for m in messages
     ]
     
-    # Run hierarchical summarization
-    summarizer = HierarchicalSummarizer(message_dicts)
-    summarizer.run_pipeline()
+    # Register task with TaskManager
+    task_context = task_manager.start_task(upload_id)
     
-    # Return structured data for frontend
-    return {
-        "status": "complete",
-        "insights": summarizer.get_insights_data()
-    }
+    try:
+        # Run hierarchical summarization with cancellation support
+        summarizer = HierarchicalSummarizer(message_dicts, upload_id=upload_id)
+        summarizer.run_pipeline(
+            cancellation_token=task_context.token,
+            log_callback=lambda msg: task_manager.log(upload_id, msg)
+        )
+        
+        # Return structured data for frontend
+        return {
+            "status": "complete",
+            "insights": summarizer.get_insights_data()
+        }
+    
+    except TaskCancelledException:
+        return {
+            "status": "cancelled",
+            "insights": None
+        }
+    
+    finally:
+        # Cleanup task
+        task_manager.end_task(upload_id)

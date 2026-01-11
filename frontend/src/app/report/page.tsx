@@ -21,7 +21,8 @@ import ProcessingOverlay from "@/components/ui/ProcessingOverlay";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles, ArrowLeft } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { AuroraText } from "@/components/ui/aurora-text";
 
 export default function ReportPage() {
     const {
@@ -59,17 +60,22 @@ export default function ReportPage() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => router.push("/")}
-                            className="w-9 h-9 rounded-xl bg-[#111114] border border-white/5 flex items-center justify-center text-gray-500 hover:text-white hover:border-purple-500/30 transition-all cursor-pointer"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                        </button>
-                        <h1 className="text-xl font-heading font-bold text-white">
-                            Orbit <span className="text-purple-400">Intelligence</span>
+                    <button
+                        onClick={() => router.push("/")}
+                        className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer group"
+                    >
+                        <h1 className="text-xl md:text-2xl font-heading font-bold">
+                            <span className="text-white">Orbit</span>
+                            <span className="text-white">.</span>
+                            <AuroraText
+                                colors={["#a855f7", "#7c3aed", "#8b5cf6", "#a855f7"]}
+                                speed={1.5}
+                                className="font-bold"
+                            >
+                                Intelligence
+                            </AuroraText>
                         </h1>
-                    </div>
+                    </button>
 
                     <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-full">
                         <Sparkles className="w-3.5 h-3.5 text-purple-400" />

@@ -222,18 +222,28 @@ class AIEngine:
         """
         Run full analysis across all 4 categories.
         
-        Uses hierarchical summarization (Week→Month→Year) for temporal awareness.
-        Much more efficient: ~2-3k tokens vs 15k with raw sampling.
+        Uses simple message sampling for efficiency.
+        Deep hierarchical insights are handled separately by /ai/deep-insights.
         """
-        # Use hierarchical summarizer for temporal-aware context
-        from app.services.hierarchical_summarizer import HierarchicalSummarizer
+        # Simple sampling approach - no heavy pipeline needed for 4 insight cards
+        # Sample up to 150 messages evenly distributed
+        sample_size = min(150, len(messages))
+        step = max(1, len(messages) // sample_size)
+        sampled_messages = messages[::step][:sample_size]
         
-        print("[PIPELINE] Starting hierarchical summarization...")
-        summarizer = HierarchicalSummarizer(messages)
-        context = summarizer.build_ai_context(include_recent_messages=15)
+        # Build simple context from sampled messages
+        context_lines = []
+        for msg in sampled_messages:
+            sender = msg.get('sender', 'Unknown')
+            content = msg.get('content', '')[:120]
+            context_lines.append(f"{sender}: {content}")
+        context = "\n".join(context_lines)
         
-        # Get participant names
-        participant_names = summarizer.participants
+        # Get participant names from messages
+        participant_set = set()
+        for msg in messages:
+            participant_set.add(msg.get('sender', 'Unknown'))
+        participant_names = sorted(list(participant_set))
         participants_str = ' and '.join(participant_names) if participant_names else "the participants"
         
         # Build simple stats summary

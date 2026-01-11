@@ -120,8 +120,29 @@ def parse_whatsapp(text: str) -> List[ParsedMessage]:
     return messages
 
 
+def fix_instagram_encoding(text: str) -> str:
+    """
+    Fix Instagram's encoding quirk.
+    
+    Instagram exports UTF-8 text encoded as Latin-1 escape sequences.
+    E.g., Hindi text appears as "à¤à¤¨à¥à¤·à¥à¤à¤¾" instead of actual Devanagari.
+    
+    This function decodes such text back to proper UTF-8.
+    """
+    if not text:
+        return text
+    try:
+        # Instagram encodes UTF-8 bytes as Latin-1, so we:
+        # 1. Encode the string back to Latin-1 bytes (treating each char as a byte)
+        # 2. Decode those bytes as UTF-8
+        return text.encode('latin-1').decode('utf-8')
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        # If it fails, the text might already be correct or use different encoding
+        return text
+
+
 def parse_instagram(json_string: str) -> List[ParsedMessage]:
-    """Parse Instagram chat export JSON."""
+    """Parse Instagram chat export JSON with proper encoding handling."""
     import json
     
     try:
@@ -134,10 +155,15 @@ def parse_instagram(json_string: str) -> List[ParsedMessage]:
         for i, msg in enumerate(raw_messages):
             if msg.get('content') and msg.get('sender_name'):
                 timestamp = datetime.fromtimestamp(msg.get('timestamp_ms', 0) / 1000)
+                
+                # Fix Instagram's encoding quirk for sender name and content
+                sender = fix_instagram_encoding(msg['sender_name'])
+                content = fix_instagram_encoding(msg['content'])
+                
                 messages.append(ParsedMessage(
                     id=f"ig-{i}",
-                    sender=msg['sender_name'],
-                    content=msg['content'],
+                    sender=sender,
+                    content=content,
                     timestamp=timestamp,
                     week_id=get_week_id(timestamp)
                 ))
