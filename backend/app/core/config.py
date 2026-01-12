@@ -6,10 +6,10 @@ import os
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
-    # Database - Use SQLite for local dev, PostgreSQL for Docker
+    # Database
     database_url: str = os.getenv(
         "DATABASE_URL", 
-        "sqlite:///./orbit.db"  # Local SQLite for development
+        "sqlite:///./orbit.db"
     )
     
     # AI Model
