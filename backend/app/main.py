@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from app.api.v1_upload import router as upload_router
 from app.api.v1_analysis import router as analysis_router
 from app.api.v1_ws import router as ws_router
+from app.api.v1_export import router as export_router
 from app.db.session import engine
 from app.db.models import Base
 
@@ -48,6 +49,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(analysis_router)
 app.include_router(ws_router)
+app.include_router(export_router)
 
 
 @app.get("/")

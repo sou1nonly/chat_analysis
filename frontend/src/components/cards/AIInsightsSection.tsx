@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Brain, MessageSquare, Heart, Users, BarChart3, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import InsightsDisplay from "./InsightsDisplay";
-import LogTerminal from "@/components/ui/LogTerminal";
+import ModelSelector from "@/components/ui/ModelSelector";
 
 // Individual insight card components
 function InsightCard({
@@ -54,7 +54,7 @@ function InsightCard({
 function InsightText({ label, value }: { label: string; value: string | object }) {
     // Safety: convert objects to string if AI returns structured data
     const displayValue = typeof value === 'object' && value !== null
-        ? JSON.stringify(value, null, 2).replace(/[{}"]/g, '').trim()
+        ? JSON.stringify(value, null, 2).replace(/[{}\"]/g, '').trim()
         : String(value || 'Waiting for analysis...');
 
     return (
@@ -109,129 +109,65 @@ function FlagBadge({ type, text }: { type: 'red' | 'green'; text: string }) {
     );
 }
 
-// Pipeline stages with checkpoints
+// Pipeline stages for progress display
 const PIPELINE_STAGES = [
-    { id: 'init', label: 'Initializing AI engine', duration: 2000 },
-    { id: 'preprocess', label: 'Preprocessing messages', duration: 3000 },
-    { id: 'weekly', label: 'Creating weekly summaries', duration: 4000 },
-    { id: 'monthly', label: 'Building monthly insights', duration: 3000 },
-    { id: 'yearly', label: 'Generating yearly overview', duration: 2000 },
-    { id: 'analyze', label: 'AI analyzing patterns', duration: 15000 },
+    { id: 'init', label: 'Initializing AI engine', percent: 5 },
+    { id: 'timeline', label: 'Building your timeline', percent: 20 },
+    { id: 'weekly', label: 'Analyzing weekly patterns', percent: 40 },
+    { id: 'monthly', label: 'Generating monthly insights', percent: 60 },
+    { id: 'yearly', label: 'Creating yearly overview', percent: 80 },
+    { id: 'insights', label: 'Generating AI insights', percent: 95 },
 ];
 
-// Detailed loading overlay with checkpoints
-function LoadingOverlay({ stage }: { stage: string }) {
-    const [completedSteps, setCompletedSteps] = useState<string[]>([]);
-    const [currentStep, setCurrentStep] = useState(0);
-
-    // Simulate progress through stages
-    useEffect(() => {
-        let timeout: NodeJS.Timeout;
-
-        const advanceStep = () => {
-            if (currentStep < PIPELINE_STAGES.length) {
-                const currentStage = PIPELINE_STAGES[currentStep];
-                setCompletedSteps(prev => [...prev, currentStage.id]);
-                setCurrentStep(prev => prev + 1);
-
-                if (currentStep + 1 < PIPELINE_STAGES.length) {
-                    timeout = setTimeout(advanceStep, PIPELINE_STAGES[currentStep + 1].duration);
-                }
-            }
-        };
-
-        // Start first step after a short delay
-        timeout = setTimeout(advanceStep, PIPELINE_STAGES[0].duration);
-
-        return () => clearTimeout(timeout);
-    }, []);
-
+// Improved loading overlay with accurate progress
+function LoadingOverlay({ stage, progress, eta }: { stage: string; progress: number; eta: number }) {
     return (
         <div className="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-md bg-black/60 rounded-2xl">
             <div className="w-full max-w-md px-8 py-6">
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
                     <motion.div
-                        animate={{
-                            scale: [1, 1.1, 1],
-                        }}
-                        transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                         className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/30"
                     >
                         <Brain className="w-7 h-7 text-white" />
                     </motion.div>
                     <div>
                         <h3 className="text-lg font-bold text-white">Analyzing Your Chat</h3>
-                        <p className="text-sm text-zinc-400">Building relationship timeline...</p>
+                        <p className="text-sm text-zinc-400">{stage}</p>
                     </div>
                 </div>
 
-                {/* Progress steps */}
+                {/* Progress bar */}
                 <div className="space-y-3">
-                    {PIPELINE_STAGES.map((pipelineStage, index) => {
-                        const isCompleted = completedSteps.includes(pipelineStage.id);
-                        const isCurrent = index === currentStep && !isCompleted;
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        <motion.div
+                            className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${progress}%` }}
+                            transition={{ duration: 0.5 }}
+                        />
+                    </div>
+                    <div className="flex justify-between text-xs text-zinc-500">
+                        <span>{progress}% complete</span>
+                        <span>~{eta} seconds remaining</span>
+                    </div>
+                </div>
+
+                {/* Current stage indicator */}
+                <div className="mt-6 space-y-2">
+                    {PIPELINE_STAGES.map((s) => {
+                        const isComplete = progress >= s.percent;
+                        const isCurrent = progress >= s.percent - 15 && progress < s.percent + 5;
 
                         return (
-                            <motion.div
-                                key={pipelineStage.id}
-                                initial={{ opacity: 0.4 }}
-                                animate={{
-                                    opacity: isCompleted || isCurrent ? 1 : 0.4,
-                                }}
-                                className="flex items-center gap-3"
-                            >
-                                {/* Checkbox */}
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted
-                                    ? 'bg-emerald-500 border-emerald-500'
-                                    : isCurrent
-                                        ? 'border-purple-500 bg-purple-500/20'
-                                        : 'border-zinc-600 bg-transparent'
-                                    }`}>
-                                    {isCompleted ? (
-                                        <motion.svg
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            className="w-4 h-4 text-white"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </motion.svg>
-                                    ) : isCurrent ? (
-                                        <motion.div
-                                            animate={{ rotate: 360 }}
-                                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                            className="w-3 h-3 border-2 border-purple-500 border-t-transparent rounded-full"
-                                        />
-                                    ) : null}
-                                </div>
-
-                                {/* Label */}
-                                <span className={`text-sm transition-colors duration-300 ${isCompleted
-                                    ? 'text-emerald-400'
-                                    : isCurrent
-                                        ? 'text-white font-medium'
-                                        : 'text-zinc-500'
-                                    }`}>
-                                    {pipelineStage.label}
-                                </span>
-                            </motion.div>
+                            <div key={s.id} className={`flex items-center gap-2 text-sm ${isComplete ? 'text-emerald-400' : isCurrent ? 'text-white' : 'text-zinc-600'}`}>
+                                <div className={`w-2 h-2 rounded-full ${isComplete ? 'bg-emerald-400' : isCurrent ? 'bg-purple-400 animate-pulse' : 'bg-zinc-700'}`} />
+                                {s.label}
+                            </div>
                         );
                     })}
-                </div>
-
-                {/* Time estimate */}
-                <div className="mt-6 pt-4 border-t border-zinc-800">
-                    <div className="flex items-center justify-between text-xs text-zinc-500">
-                        <span>Processing {stage.includes('history') ? 'chat history' : 'data'}...</span>
-                        <span>~30-60 seconds</span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -244,11 +180,13 @@ export default function AIInsightsSection() {
         uploadId,
         aiInsights, setAiInsights,
         aiStatus, setAiStatus,
-        setAiProgress,
+        aiProgress, aiStage, aiEta, setAiProgress,
+        aiStarted,
+        aiModelType,
+        selectedOfflineModel,
         stats
     } = useOrbitStore();
 
-    const [loadingStage, setLoadingStage] = useState("Initializing AI...");
     const [metadata, setMetadata] = useState<{
         participants?: string[];
         messages_analyzed?: number;
@@ -285,98 +223,74 @@ export default function AIInsightsSection() {
             narrative: string;
         }>;
     } | null>(null);
-    const [deepInsightsLoading, setDeepInsightsLoading] = useState(false);
-    const [pipelineLogs, setPipelineLogs] = useState<string[]>([]);
 
-    // Refs to prevent duplicate API calls and WebSocket management
+    // Refs to prevent duplicate API calls
     const analysisStartedRef = useRef(false);
-    const deepInsightsStartedRef = useRef(false);
-    const wsRef = useRef<WebSocket | null>(null);
 
-    // WebSocket connection for task cancellation and log streaming
-    const connectWebSocket = (taskUploadId: number) => {
-        // Close existing connection
-        if (wsRef.current) {
-            wsRef.current.close();
-        }
-
-        const wsUrl = `ws://localhost:8000/ws/task/${taskUploadId}`;
-        console.log('[WS] Connecting to:', wsUrl);
-
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            console.log('[WS] Connected to task', taskUploadId);
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'log') {
-                    setPipelineLogs(prev => [...prev, data.message]);
-                } else if (data.type === 'complete') {
-                    console.log('[WS] Task complete');
-                }
-            } catch (e) {
-                console.error('[WS] Parse error:', e);
-            }
-        };
-
-        ws.onclose = () => {
-            console.log('[WS] Disconnected from task', taskUploadId);
-            wsRef.current = null;
-        };
-
-        ws.onerror = (error) => {
-            console.error('[WS] Error:', error);
-        };
-    };
-
-    // Cleanup WebSocket on unmount (triggers backend cancellation)
+    // Reset when upload changes
     useEffect(() => {
-        return () => {
-            if (wsRef.current) {
-                console.log('[WS] Component unmounting, closing WebSocket to cancel task');
-                wsRef.current.close();
-                wsRef.current = null;
-            }
-        };
-    }, []);
-
-    // Clear deep insights and reset refs when upload changes
-    useEffect(() => {
-        // Close existing WebSocket when upload changes
-        if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-        }
-        setPipelineLogs([]);
         setDeepInsights(null);
-        setDeepInsightsLoading(false);
         analysisStartedRef.current = false;
-        deepInsightsStartedRef.current = false;
     }, [uploadId]);
 
-    // Trigger AI analysis when stats are ready
+    // Calculate ETA based on message count
+    const calculateEta = (messageCount: number, currentProgress: number) => {
+        const baseTime = 30; // seconds
+        const timePerThousand = 15;
+        const totalEstimate = baseTime + (messageCount / 1000) * timePerThousand;
+        return Math.max(5, Math.round(totalEstimate * (1 - currentProgress / 100)));
+    };
+
+    // Run unified analysis pipeline when user clicks start
     useEffect(() => {
-        // Use ref to prevent duplicate calls
-        if (!uploadId || !stats || aiInsights || analysisStartedRef.current) {
+        if (!uploadId || !stats || !aiStarted || analysisStartedRef.current) {
             return;
         }
         analysisStartedRef.current = true;
 
-        const runAnalysis = async () => {
-            setAiStatus('analyzing');
-            setLoadingStage("Connecting to AI engine...");
+        const runUnifiedAnalysis = async () => {
+            const messageCount = stats.totalMessages || 1000;
 
             try {
-                // Init AI
-                await api.initAI();
-                setLoadingStage("Analyzing your chat history...");
+                // Stage 0: Pre-flight check
+                setAiStatus('analyzing');
+                setAiProgress(2, 'Checking AI availability...', calculateEta(messageCount, 2));
+                const modelId = aiModelType === 'offline' ? selectedOfflineModel : undefined;
 
-                // Run analysis
-                const response = await api.analyzeChat(uploadId);
+                const preflight = await api.preflight(aiModelType, modelId);
+
+                if (!preflight.ready) {
+                    // Show specific error message in UI (don't throw to avoid dev overlay)
+                    let errorMsg = preflight.message || 'AI is not available.';
+                    if (preflight.rate_limited) {
+                        errorMsg = 'Rate limit reached. Please wait or upgrade to continue.';
+                    } else if (!preflight.ollama_running) {
+                        errorMsg = 'Ollama is not running. Please start Ollama first.';
+                    }
+                    setAiStatus('error');
+                    setAiProgress(0, errorMsg, 0);
+                    return; // Exit analysis early
+                }
+
+                // Stage 1: Initialize (now safe to proceed)
+                setAiProgress(5, 'Initializing AI engine...', calculateEta(messageCount, 5));
+                await api.initAI(aiModelType, modelId);
+
+                // Stage 2: Get deep insights FIRST (timeline, weekly, monthly, yearly)
+                setAiProgress(20, 'Building your timeline...', calculateEta(messageCount, 20));
+
+                // Pass model config to API
+                const deepResponse = await api.getDeepInsights(uploadId, aiModelType, modelId);
+
+                if (deepResponse.status === 'complete' && deepResponse.insights) {
+                    setDeepInsights(deepResponse.insights);
+                    setAiProgress(70, 'Timeline complete, generating insights...', calculateEta(messageCount, 70));
+                }
+
+                // Stage 3: Generate AI insights
+                setAiProgress(80, 'Generating AI insights...', calculateEta(messageCount, 80));
+
+                const response = await api.analyzeChat(uploadId, aiModelType, modelId);
 
                 if (response.status === 'complete' && response.insights) {
                     // Store metadata if available
@@ -408,51 +322,24 @@ export default function AIInsightsSection() {
                             reciprocityScore: response.insights.sharing_balance?.reciprocity_score || 50,
                         }
                     });
+
+                    setAiProgress(100, 'Analysis complete!', 0);
                     setAiStatus('complete');
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('AI analysis failed:', error);
                 setAiStatus('error');
-                setLoadingStage("Analysis failed. Please try again.");
+                const errorMessage = error instanceof Error ? error.message : 'Analysis failed. Please try again.';
+                setAiProgress(0, errorMessage, 0);
             }
         };
 
-        runAnalysis();
-    }, [uploadId, stats, aiInsights]);
-
-    // Fetch deep hierarchical insights when AI analysis completes
-    useEffect(() => {
-        // Use ref to prevent duplicate calls
-        if (!uploadId || !aiInsights || deepInsightsStartedRef.current) {
-            return;
-        }
-        deepInsightsStartedRef.current = true;
-
-        const fetchDeepInsights = async () => {
-            setDeepInsightsLoading(true);
-            setPipelineLogs([]);
-
-            // Connect WebSocket for log streaming and cancellation
-            connectWebSocket(uploadId);
-
-            try {
-                const response = await api.getDeepInsights(uploadId);
-                if (response.status === 'complete' && response.insights) {
-                    setDeepInsights(response.insights);
-                }
-            } catch (error) {
-                console.error('Deep insights failed:', error);
-            } finally {
-                setDeepInsightsLoading(false);
-            }
-        };
-
-        fetchDeepInsights();
-    }, [uploadId, aiInsights]);
+        runUnifiedAnalysis();
+    }, [uploadId, stats, aiStarted]);
 
     const isLoading = aiStatus === 'preprocessing' || aiStatus === 'analyzing';
     const hasError = aiStatus === 'error';
-
+    const showModelSelector = !aiStarted && aiStatus === 'idle' && !aiInsights;
 
     return (
         <div className="col-span-1 md:col-span-4 mt-8">
@@ -479,137 +366,140 @@ export default function AIInsightsSection() {
                     )}
                 </div>
 
-                {/* Cards grid with blur overlay when loading */}
-                <div className="relative min-h-[300px]">
-                    {/* Loading overlay */}
-                    <AnimatePresence>
-                        {isLoading && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                            >
-                                <LoadingOverlay stage={loadingStage} />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                {/* Model Selector - shown before analysis starts */}
+                {showModelSelector && (
+                    <ModelSelector />
+                )}
 
-                    {/* Error state */}
-                    {hasError && !isLoading && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900/80 rounded-2xl">
-                            <div className="text-center space-y-3">
-                                <p className="text-red-400 font-medium">Analysis failed</p>
-                                <button
-                                    onClick={() => {
-                                        setAiStatus('idle');
-                                        setAiInsights(null as any);
-                                    }}
-                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm text-white transition-colors"
+                {/* Analysis content - shown after analysis starts */}
+                {(aiStarted || aiInsights) && (
+                    <div className="relative min-h-[300px]">
+                        {/* Loading overlay */}
+                        <AnimatePresence>
+                            {isLoading && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                 >
-                                    Retry Analysis
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                                    <LoadingOverlay
+                                        stage={aiStage}
+                                        progress={aiProgress}
+                                        eta={aiEta}
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
-                    {/* Cards grid */}
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-500 ${isLoading ? 'blur-sm opacity-30' : ''}`}>
-                        {/* Card 1: Conversation Dynamics */}
-                        <InsightCard
-                            title="Conversation Flow"
-                            icon={MessageSquare}
-                            gradient="bg-gradient-to-r from-blue-500 to-cyan-500"
-                            delay={0}
-                        >
-                            <InsightText
-                                label="Who Initiates"
-                                value={aiInsights?.conversationDynamics.initiatorSummary || "Waiting for analysis..."}
-                            />
-                            <InsightText
-                                label="Flow Pattern"
-                                value={aiInsights?.conversationDynamics.flowPattern || "Waiting for analysis..."}
-                            />
-                        </InsightCard>
-
-                        {/* Card 2: Emotional Health */}
-                        <InsightCard
-                            title="Emotional Sentiment"
-                            icon={Heart}
-                            gradient="bg-gradient-to-r from-pink-500 to-rose-500"
-                            delay={0.1}
-                        >
-                            <InsightText
-                                label="Overall Tone"
-                                value={aiInsights?.emotionalHealth.overallSentiment || "Waiting for analysis..."}
-                            />
-                            {aiInsights && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {aiInsights.emotionalHealth.greenFlags.slice(0, 2).map((flag, i) => (
-                                        <FlagBadge key={`g-${i}`} type="green" text={flag} />
-                                    ))}
-                                    {aiInsights.emotionalHealth.redFlags.slice(0, 1).map((flag, i) => (
-                                        <FlagBadge key={`r-${i}`} type="red" text={flag} />
-                                    ))}
+                        {/* Error state */}
+                        {hasError && !isLoading && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900/80 rounded-2xl">
+                                <div className="text-center space-y-3">
+                                    <p className="text-red-400 font-medium">Analysis failed</p>
+                                    <button
+                                        onClick={() => {
+                                            setAiStatus('idle');
+                                            setAiInsights(null as any);
+                                            analysisStartedRef.current = false;
+                                        }}
+                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm text-white transition-colors cursor-pointer"
+                                    >
+                                        Retry Analysis
+                                    </button>
                                 </div>
-                            )}
-                        </InsightCard>
+                            </div>
+                        )}
 
-                        {/* Card 3: Engagement */}
-                        <InsightCard
-                            title="Engagement Depth"
-                            icon={BarChart3}
-                            gradient="bg-gradient-to-r from-purple-500 to-violet-500"
-                            delay={0.2}
-                        >
-                            <InsightText
-                                label="Balance"
-                                value={aiInsights?.engagement.balanceSummary || "Waiting for analysis..."}
-                            />
-                            <ScoreBar
-                                label="Engagement Score"
-                                score={aiInsights?.engagement.engagementScore || 0}
-                                color="bg-gradient-to-r from-purple-500 to-violet-500"
-                            />
-                        </InsightCard>
-
-                        {/* Card 4: Sharing Balance */}
-                        <InsightCard
-                            title="Personal Sharing"
-                            icon={Users}
-                            gradient="bg-gradient-to-r from-amber-500 to-orange-500"
-                            delay={0.3}
-                        >
-                            <InsightText
-                                label="Openness"
-                                value={aiInsights?.sharingBalance.sharingSummary || "Waiting for analysis..."}
-                            />
-                            <ScoreBar
-                                label="Reciprocity Score"
-                                score={aiInsights?.sharingBalance.reciprocityScore || 0}
-                                color="bg-gradient-to-r from-amber-500 to-orange-500"
-                            />
-                        </InsightCard>
-                    </div>
-
-                    {/* Deep Insights - Hierarchical Timeline */}
-                    {(deepInsights || deepInsightsLoading) && (
-                        <div className="mt-8 space-y-4">
-                            {/* Terminal logs during loading */}
-                            {deepInsightsLoading && (
-                                <LogTerminal
-                                    logs={pipelineLogs}
-                                    isLoading={deepInsightsLoading}
-                                    className="mb-4"
+                        {/* Cards grid */}
+                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-500 ${isLoading ? 'blur-sm opacity-30' : ''}`}>
+                            {/* Card 1: Conversation Dynamics */}
+                            <InsightCard
+                                title="Conversation Flow"
+                                icon={MessageSquare}
+                                gradient="bg-gradient-to-r from-blue-500 to-cyan-500"
+                                delay={0}
+                            >
+                                <InsightText
+                                    label="Who Initiates"
+                                    value={aiInsights?.conversationDynamics.initiatorSummary || "Waiting for analysis..."}
                                 />
-                            )}
+                                <InsightText
+                                    label="Flow Pattern"
+                                    value={aiInsights?.conversationDynamics.flowPattern || "Waiting for analysis..."}
+                                />
+                            </InsightCard>
 
-                            <InsightsDisplay
-                                data={deepInsights}
-                                isLoading={deepInsightsLoading}
-                            />
+                            {/* Card 2: Emotional Health */}
+                            <InsightCard
+                                title="Emotional Sentiment"
+                                icon={Heart}
+                                gradient="bg-gradient-to-r from-pink-500 to-rose-500"
+                                delay={0.1}
+                            >
+                                <InsightText
+                                    label="Overall Tone"
+                                    value={aiInsights?.emotionalHealth.overallSentiment || "Waiting for analysis..."}
+                                />
+                                {aiInsights && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {aiInsights.emotionalHealth.greenFlags.slice(0, 2).map((flag, i) => (
+                                            <FlagBadge key={`g-${i}`} type="green" text={flag} />
+                                        ))}
+                                        {aiInsights.emotionalHealth.redFlags.slice(0, 1).map((flag, i) => (
+                                            <FlagBadge key={`r-${i}`} type="red" text={flag} />
+                                        ))}
+                                    </div>
+                                )}
+                            </InsightCard>
+
+                            {/* Card 3: Engagement */}
+                            <InsightCard
+                                title="Engagement Depth"
+                                icon={BarChart3}
+                                gradient="bg-gradient-to-r from-purple-500 to-violet-500"
+                                delay={0.2}
+                            >
+                                <InsightText
+                                    label="Balance"
+                                    value={aiInsights?.engagement.balanceSummary || "Waiting for analysis..."}
+                                />
+                                <ScoreBar
+                                    label="Engagement Score"
+                                    score={aiInsights?.engagement.engagementScore || 0}
+                                    color="bg-gradient-to-r from-purple-500 to-violet-500"
+                                />
+                            </InsightCard>
+
+                            {/* Card 4: Sharing Balance */}
+                            <InsightCard
+                                title="Personal Sharing"
+                                icon={Users}
+                                gradient="bg-gradient-to-r from-amber-500 to-orange-500"
+                                delay={0.3}
+                            >
+                                <InsightText
+                                    label="Openness"
+                                    value={aiInsights?.sharingBalance.sharingSummary || "Waiting for analysis..."}
+                                />
+                                <ScoreBar
+                                    label="Reciprocity Score"
+                                    score={aiInsights?.sharingBalance.reciprocityScore || 0}
+                                    color="bg-gradient-to-r from-amber-500 to-orange-500"
+                                />
+                            </InsightCard>
                         </div>
-                    )}
-                </div>
+
+                        {/* Deep Insights - Your Story Together (Timeline) */}
+                        {deepInsights && (
+                            <div className="mt-8">
+                                <InsightsDisplay
+                                    data={deepInsights}
+                                    isLoading={false}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

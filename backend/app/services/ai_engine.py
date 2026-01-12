@@ -109,7 +109,9 @@ class AIEngine:
     """Ollama-based AI analysis engine with improved prompts."""
     
     _instance: Optional["AIEngine"] = None
-    _model_name: str = "deepseek-v3.1:671b-cloud"
+    _cloud_model: str = "deepseek-v3.1:671b-cloud"
+    _default_offline_model: str = "qwen2.5:0.5b"
+    _active_model: str = "deepseek-v3.1:671b-cloud"
     _ready: bool = False
     
     def __new__(cls):
@@ -117,12 +119,23 @@ class AIEngine:
             cls._instance = super().__new__(cls)
         return cls._instance
     
-    def load_model(self) -> bool:
+    def set_model(self, model_type: str = "cloud", model_id: Optional[str] = None):
+        """Set the active model based on user selection."""
+        if model_type == "offline" and model_id:
+            self._active_model = model_id
+            print(f"[AI] Using offline model: {model_id}")
+        else:
+            self._active_model = self._cloud_model
+            print(f"[AI] Using cloud model: {self._cloud_model}")
+    
+    def load_model(self, model_name: Optional[str] = None) -> bool:
         """Check if Ollama is running and model is available."""
         if not OLLAMA_AVAILABLE:
             print("[WARN] Using mock AI engine (ollama not available)")
             self._ready = False
             return True
+        
+        target_model = model_name or self._active_model
         
         try:
             models = ollama.list()
@@ -130,9 +143,9 @@ class AIEngine:
             model_names = [m.model if hasattr(m, 'model') else m.get('model', '') for m in model_list]
             print(f"[OK] Ollama connected. Models: {model_names}")
             
-            if not any(self._model_name in name for name in model_names):
-                print(f"[DOWNLOAD] Pulling model {self._model_name}...")
-                ollama.pull(self._model_name)
+            if not any(target_model in name for name in model_names):
+                print(f"[DOWNLOAD] Pulling model {target_model}...")
+                ollama.pull(target_model)
             
             self._ready = True
             return True
@@ -144,14 +157,16 @@ class AIEngine:
     def is_ready(self) -> bool:
         return self._ready
     
-    def _generate(self, prompt: str, max_tokens: int = 500) -> str:
+    def _generate(self, prompt: str, max_tokens: int = 500, model: Optional[str] = None) -> str:
         """Generate text using Ollama."""
         if not OLLAMA_AVAILABLE or not self._ready:
             return None
         
+        use_model = model or self._active_model
+        
         try:
             response = ollama.generate(
-                model=self._model_name,
+                model=use_model,
                 prompt=prompt,
                 options={
                     "num_predict": max_tokens,
@@ -217,14 +232,18 @@ class AIEngine:
         self, 
         messages: List[Dict], 
         stats: Dict,
-        progress_callback=None
+        progress_callback=None,
+        model_type: str = "cloud",
+        model_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Run full analysis across all 4 categories.
         
         Uses simple message sampling for efficiency.
-        Deep hierarchical insights are handled separately by /ai/deep-insights.
+        Supports model selection (cloud vs offline).
         """
+        # Set model based on user selection
+        self.set_model(model_type, model_id)
         # Simple sampling approach - no heavy pipeline needed for 4 insight cards
         # Sample up to 150 messages evenly distributed
         sample_size = min(150, len(messages))

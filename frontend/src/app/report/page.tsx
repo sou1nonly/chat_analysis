@@ -24,6 +24,25 @@ import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { AuroraText } from "@/components/ui/aurora-text";
 
+// Subtle spring hover animation for cards
+const springHover = {
+    scale: 1.01,
+    transition: {
+        type: "spring" as const,
+        stiffness: 300,
+        damping: 25
+    }
+};
+
+const springTap = {
+    scale: 0.99,
+    transition: {
+        type: "spring" as const,
+        stiffness: 300,
+        damping: 25
+    }
+};
+
 export default function ReportPage() {
     const {
         stats, status, uploadId,
@@ -64,7 +83,7 @@ export default function ReportPage() {
                         onClick={() => router.push("/")}
                         className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer group"
                     >
-                        <h1 className="text-xl md:text-2xl font-heading font-bold">
+                        <h1 className="text-2xl md:text-3xl font-heading font-bold">
                             <span className="text-white">Orbit</span>
                             <span className="text-white">.</span>
                             <AuroraText
@@ -91,86 +110,110 @@ export default function ReportPage() {
                     transition={{ delay: 0.1 }}
                 >
                     {/* Row 1: Overview + Activity Chart + Streak */}
-                    <div
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
                         className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <SummaryCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('trend')}
-                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <TrendCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('streak')}
-                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-green-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <StreakCard />
-                    </div>
+                    </motion.div>
 
                     {/* Row 2: Heatmap + Word Cloud */}
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('heatmap')}
-                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-purple-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <ActivityHeatmapCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('wordcloud')}
-                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-yellow-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <WordCloudCard />
-                    </div>
+                    </motion.div>
 
                     {/* Row 3: Engagement + Reply Speed + Aura + Rhythm */}
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('engagement')}
-                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-blue-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <EngagementCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
                         className="col-span-12 md:col-span-4 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <ReplyTimingCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
                         className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <AuraCard />
-                    </div>
+                    </motion.div>
 
-                    <div
-                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-4"
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-6 md:col-span-2 bg-[#111114] rounded-2xl border border-white/5 p-1 overflow-hidden"
                     >
                         <RhythmCard />
-                    </div>
+                    </motion.div>
 
                     {/* Row 4: Links + Emoji Timeline + Initiator */}
-                    <div
+                    <motion.div
                         onClick={() => handleExpand('links')}
-                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-blue-500/30 transition-all"
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer"
                     >
                         <LinksCard />
-                    </div>
+                    </motion.div>
 
-                    <div
-                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4 cursor-pointer hover:border-pink-500/30 transition-all"
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
+                        className="col-span-12 md:col-span-6 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <EmojiTimelineCard />
-                    </div>
+                    </motion.div>
 
-                    <div
+                    <motion.div
+                        whileHover={springHover}
+                        whileTap={springTap}
                         className="col-span-12 md:col-span-3 bg-[#111114] rounded-2xl border border-white/5 p-4"
                     >
                         <InitiatorCard />
-                    </div>
+                    </motion.div>
 
                     {/* AI Insights - Full Width */}
                     <div className="col-span-12">
@@ -179,9 +222,12 @@ export default function ReportPage() {
 
                     {/* Receipt */}
                     <div className="col-span-12 flex justify-center py-6">
-                        <div className="w-full max-w-sm">
+                        <motion.div
+                            className="w-full max-w-sm"
+                            whileHover={{ scale: 1.01, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+                        >
                             <ReceiptCard />
-                        </div>
+                        </motion.div>
                     </div>
                 </motion.div>
 

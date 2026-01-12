@@ -113,7 +113,7 @@ class HierarchicalSummarizer:
     Pipeline: Raw Messages → Preprocessed → Weekly AI → Monthly AI → Yearly AI
     """
     
-    def __init__(self, messages: List[Dict[str, Any]], upload_id: int = None):
+    def __init__(self, messages: List[Dict[str, Any]], upload_id: int = None, model_type: str = "cloud", model_id: Optional[str] = None):
         self.raw_messages = messages
         self.upload_id = upload_id
         self.preprocessed: List[Dict[str, Any]] = []
@@ -124,11 +124,23 @@ class HierarchicalSummarizer:
         self._cancellation_token = None
         self._log_callback = None
         
+        # Model configuration
+        self._cloud_model = "deepseek-v3.1:671b-cloud"
+        if model_type == "offline" and model_id:
+            self._active_model = model_id
+            print(f"[SUMMARIZER] Using offline model: {model_id}")
+        else:
+            self._active_model = self._cloud_model
+            print(f"[SUMMARIZER] Using cloud model: {self._cloud_model}")
+        
     def _log(self, message: str):
         """Log message and broadcast to subscribers."""
-        print(message)
         if self._log_callback:
+            # Callback handles printing, don't double-print
             self._log_callback(message)
+        else:
+            # No callback, print directly
+            print(message)
     
     def _check_cancelled(self):
         """Check if task was cancelled and raise exception if so."""
@@ -301,7 +313,7 @@ CONVERSATION SAMPLES:
 Write a brief, specific summary (1-2 sentences):"""
 
             response = ollama.generate(
-                model="deepseek-v3.1:671b-cloud",
+                model=self._active_model,
                 prompt=prompt,
                 options={"temperature": 0.6, "num_predict": 60}
             )
@@ -449,7 +461,7 @@ Write a natural, specific summary (1-2 sentences only).
 Summary:"""
 
             response = ollama.generate(
-                model="deepseek-v3.1:671b-cloud",
+                model=self._active_model,
                 prompt=prompt,
                 options={"temperature": 0.7, "num_predict": 80}
             )
@@ -501,14 +513,14 @@ Summary:"""
                 continue
         
         sorted_months = sorted(months.keys())
-        print(f"      Processing {len(sorted_months)} months...")
+        self._log(f"      Processing {len(sorted_months)} months...")
         
         for idx, month_id in enumerate(sorted_months):
             buckets = months[month_id]
             
             # Progress
             if (idx + 1) % 3 == 0:
-                print(f"      Month {idx + 1}/{len(sorted_months)}: {month_id}")
+                self._log(f"      Month {idx + 1}/{len(sorted_months)}: {month_id}")
             
             total_msgs = sum(b.message_count for b in buckets)
             sentiments = [b.avg_sentiment for b in buckets]
@@ -594,7 +606,7 @@ WEEKLY SUMMARIES:
 Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:"""
 
             response = ollama.generate(
-                model="deepseek-v3.1:671b-cloud",
+                model=self._active_model,
                 prompt=prompt,
                 options={"temperature": 0.6, "num_predict": 80}
             )
@@ -606,7 +618,7 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
                 return self._generate_fallback_narrative(month_id, sentiment, "stable", activity)
                 
         except Exception as e:
-            print(f"      [WARN] Monthly synthesis failed for {month_id}: {e}")
+            self._log(f"      [WARN] Monthly synthesis failed for {month_id}: {e}")
             return self._generate_fallback_narrative(month_id, sentiment, "stable", activity)
 
     def _create_yearly_summaries_with_ai(self):
@@ -621,11 +633,11 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
                 continue
         
         sorted_years = sorted(years.keys())
-        print(f"      Processing {len(sorted_years)} years...")
+        self._log(f"      Processing {len(sorted_years)} years...")
         
         for year in sorted_years:
             months = years[year]
-            print(f"      Year {year}: {len(months)} months")
+            self._log(f"      Year {year}: {len(months)} months")
             
             total_msgs = sum(m.total_messages for m in months)
             sentiments = [m.avg_sentiment for m in months]
@@ -710,7 +722,7 @@ MONTHLY SUMMARIES:
 Write a rich yearly narrative (3-4 sentences):"""
 
             response = ollama.generate(
-                model="deepseek-v3.1:671b-cloud",
+                model=self._active_model,
                 prompt=prompt,
                 options={"temperature": 0.6, "num_predict": 120}
             )
@@ -722,7 +734,7 @@ Write a rich yearly narrative (3-4 sentences):"""
                 return self._generate_fallback_yearly(year, sentiment, arc)
                 
         except Exception as e:
-            print(f"      [WARN] Yearly synthesis failed for {year}: {e}")
+            self._log(f"      [WARN] Yearly synthesis failed for {year}: {e}")
             return self._generate_fallback_yearly(year, sentiment, arc)
     
     def _generate_fallback_yearly(self, year: int, sentiment: float, arc: str) -> str:
@@ -799,7 +811,7 @@ Write a rich yearly narrative (3-4 sentences):"""
                 lines.append(f"{sender}: {content}")
         
         context = "\n".join(lines)
-        print(f"[CONTEXT] Built AI context: {len(context)} chars (~{len(context)//4} tokens)")
+        self._log(f"[CONTEXT] Built AI context: {len(context)} chars (~{len(context)//4} tokens)")
         
         return context
     

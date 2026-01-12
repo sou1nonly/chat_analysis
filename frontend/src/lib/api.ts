@@ -127,12 +127,27 @@ class OrbitAPI {
     /**
      * Initialize AI engine
      */
-    async initAI(): Promise<{ status: string }> {
+    /**
+     * Initialize AI engine
+     */
+    async initAI(modelType: string = 'cloud', modelId?: string): Promise<{ status: string }> {
         const response = await fetch(`${API_BASE}/api/v1/ai/init`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model_type: modelType,
+                model_id: modelId
+            })
         });
 
         if (!response.ok) {
+            // Check for specific 500
+            const errorText = await response.text();
+            if (errorText.includes("Ollama not found")) {
+                throw new Error("Ollama is not running. Please start Ollama for offline analysis.");
+            }
             throw new Error('Failed to initialize AI');
         }
 
@@ -148,13 +163,42 @@ class OrbitAPI {
     }
 
     /**
+     * Pre-flight check before analysis.
+     * Checks if Ollama is running and tests for rate limits.
+     */
+    async preflight(modelType: string = 'cloud', modelId?: string): Promise<{
+        ready: boolean;
+        ollama_running: boolean;
+        rate_limited: boolean;
+        message: string;
+    }> {
+        const response = await fetch(`${API_BASE}/api/v1/ai/preflight`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model_type: modelType,
+                model_id: modelId
+            })
+        });
+        return response.json();
+    }
+
+    /**
      * Run full AI analysis
      */
-    async analyzeChat(uploadId: number): Promise<AIAnalyzeResponse> {
+    async analyzeChat(
+        uploadId: number,
+        modelType: 'cloud' | 'offline' = 'cloud',
+        modelId?: string
+    ): Promise<AIAnalyzeResponse> {
         const response = await fetch(`${API_BASE}/api/v1/ai/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ upload_id: uploadId }),
+            body: JSON.stringify({
+                upload_id: uploadId,
+                model_type: modelType,
+                model_id: modelId
+            }),
         });
 
         if (!response.ok) {
@@ -170,6 +214,34 @@ class OrbitAPI {
     async getInsights(uploadId: number): Promise<{ status: string; insights: AIInsights | null }> {
         const response = await fetch(`${API_BASE}/api/v1/ai/insights/${uploadId}`);
         return response.json();
+    }
+
+    /**
+     * Get available Ollama models for offline mode
+     */
+    async getAvailableModels(): Promise<{
+        ollama_running: boolean;
+        models: Array<{
+            id: string;
+            name: string;
+            ram: string;
+            gpu: string;
+            installed: boolean;
+        }>;
+        installed_count: number;
+        error?: string;
+    }> {
+        try {
+            const response = await fetch(`${API_BASE}/api/v1/ai/models`);
+            return response.json();
+        } catch (error) {
+            return {
+                ollama_running: false,
+                models: [],
+                installed_count: 0,
+                error: 'Failed to connect to backend'
+            };
+        }
     }
 
     /**
@@ -198,7 +270,11 @@ class OrbitAPI {
     /**
      * Get deep hierarchical insights (weekly, monthly, yearly summaries)
      */
-    async getDeepInsights(uploadId: number): Promise<{
+    async getDeepInsights(
+        uploadId: number,
+        modelType: 'cloud' | 'offline' = 'cloud',
+        modelId?: string
+    ): Promise<{
         status: string;
         insights: {
             participants: string[];
@@ -230,7 +306,11 @@ class OrbitAPI {
             }>;
         } | null;
     }> {
-        const response = await fetch(`${API_BASE}/api/v1/ai/deep-insights/${uploadId}`);
+        const params = new URLSearchParams();
+        params.append('model_type', modelType);
+        if (modelId) params.append('model_id', modelId);
+
+        const response = await fetch(`${API_BASE}/api/v1/ai/deep-insights/${uploadId}?${params}`);
         if (!response.ok) {
             throw new Error('Failed to get deep insights');
         }

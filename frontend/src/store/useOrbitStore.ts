@@ -81,6 +81,14 @@ interface OrbitState {
     setAiStatus: (status: 'idle' | 'preprocessing' | 'analyzing' | 'complete' | 'error') => void;
     setAiProgress: (progress: number, stage: string, eta: number) => void;
 
+    // Model Selection
+    aiModelType: 'cloud' | 'offline';
+    aiStarted: boolean;
+    selectedOfflineModel: string; // model ID like 'qwen2.5:3b'
+    setAiModelType: (type: 'cloud' | 'offline') => void;
+    setSelectedOfflineModel: (modelId: string) => void;
+    startAiAnalysis: () => void;
+
     // Search State
     searchResults: any[];
     setSearchResults: (results: any[]) => void;
@@ -111,6 +119,9 @@ export const useOrbitStore = create<OrbitState>()(
             aiProgress: 0,
             aiStage: '',
             aiEta: 0,
+            aiModelType: 'cloud',
+            aiStarted: false,
+            selectedOfflineModel: 'qwen2.5:0.5b',
 
             searchResults: [],
             activeCard: null,
@@ -125,7 +136,8 @@ export const useOrbitStore = create<OrbitState>()(
                 aiStatus: 'idle',
                 aiProgress: 0,
                 aiStage: '',
-                aiEta: 0
+                aiEta: 0,
+                aiStarted: false
             }),
             addLog: (log) => set((state) => ({ processingLog: [...state.processingLog, log] })),
             setPipelineReady: (ready) => set({ isPipelineReady: ready }),
@@ -144,6 +156,9 @@ export const useOrbitStore = create<OrbitState>()(
                 aiStage: stage,
                 aiEta: eta
             }),
+            setAiModelType: (type) => set({ aiModelType: type }),
+            setSelectedOfflineModel: (modelId) => set({ selectedOfflineModel: modelId }),
+            startAiAnalysis: () => set({ aiStarted: true }),
 
             setSearchResults: (results) => set({ searchResults: results }),
             setActiveCard: (cardName) => set({ activeCard: cardName }),
@@ -160,6 +175,7 @@ export const useOrbitStore = create<OrbitState>()(
                 aiProgress: 0,
                 aiStage: '',
                 aiEta: 0,
+                aiStarted: false,
                 searchResults: [],
                 activeCard: null,
                 isPipelineReady: false,

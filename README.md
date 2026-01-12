@@ -35,7 +35,8 @@ Transform your conversations into stunning visual insights:
 | **Emoji Timeline** | Emoji usage patterns over time |
 | **Initiator** | Who starts conversations more often |
 | **AI Insights** | Deep conversation analysis (4 categories) |
-| **Receipt** | Shareable summary card |
+| **Model Selector** | Choose between Cloud (Fast/DeepSeek) or Offline (Private/Ollama) |
+| **Social Sharing** | Export high-quality PNG receipts for Instagram/Twitter |
 
 ### 🤖 AI-Powered Insights
 Get deep, meaningful analysis across 4 categories:
@@ -191,10 +192,12 @@ npm run dev
 |--------|----------|-------------|
 | `POST` | `/api/v1/upload` | Upload chat file, returns stats |
 | `GET` | `/api/v1/stats/{id}` | Get computed statistics |
+| `POST` | `/api/v1/ai/preflight` | Check AI model availability & rate limits |
 | `POST` | `/api/v1/ai/init` | Initialize AI engine |
 | `POST` | `/api/v1/ai/analyze` | Run full AI analysis |
 | `GET` | `/api/v1/ai/insights/{id}` | Get cached AI insights |
 | `POST` | `/api/v1/search` | Search messages with filters |
+| `POST` | `/api/v1/export/download_image` | Generate and download social receipt image |
 
 ---
 
@@ -211,8 +214,10 @@ npm run dev
 
 1. **Sampling** — Extracts up to 500 representative messages using stratified sampling
 2. **Context** — Processes ~15,000 characters (~4k tokens) of conversation
-3. **Analysis** — Uses qwen2.5:0.5b via Ollama (runs locally, no API costs)
-4. **Insights** — Generates structured analysis across 4 categories
+3. **Selection** — Choose between **Cloud** (DeepSeek V3 via API) or **Offline** (Local Ollama)
+4. **Pre-flight** — Automatically checks model availability and rate limits before analysis
+5. **Analysis** — Generates insights using the selected model
+6. **Insights** — Generates structured analysis across 4 categories
 
 ---
 

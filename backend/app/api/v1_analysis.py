@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/v1", tags=["analysis"])
 
 class AnalysisRequest(BaseModel):
     upload_id: int
+    model_type: str = "cloud"  # "cloud" or "offline"
+    model_id: Optional[str] = None  # e.g., "qwen2.5:3b" for offline
 
 
 class AIInsightsResponse(BaseModel):
@@ -79,20 +81,149 @@ async def get_stats(upload_id: int, db: Session = Depends(get_db)):
     }
 
 
+class InitAIRequest(BaseModel):
+    model_type: str = "cloud"
+    model_id: Optional[str] = None
+
+
 @router.post("/ai/init")
-async def init_ai():
+async def init_ai(request: InitAIRequest = None):
     """Initialize the AI engine (load model into memory)."""
+    # If using cloud, no local initialization needed
+    if request and request.model_type == "cloud":
+        return {"status": "ready", "message": "Cloud AI ready"}
+        
+    # For offline, try to load Ollama
     success = ai_engine.load_model()
     if success:
         return {"status": "ready", "message": "AI Engine initialized"}
     else:
-        raise HTTPException(status_code=500, detail="Failed to initialize AI Engine")
+        # Check if we should fail strictly? 
+        # For now, yes, as offline analysis requires it.
+        raise HTTPException(status_code=500, detail="Failed to initialize AI Engine (Ollama not found)")
 
 
 @router.get("/ai/status")
 async def ai_status():
     """Check if AI engine is ready."""
     return {"ready": ai_engine.is_ready()}
+
+
+class PreflightRequest(BaseModel):
+    model_type: str = "cloud"
+    model_id: Optional[str] = None
+
+
+@router.post("/ai/preflight")
+async def ai_preflight(request: PreflightRequest):
+    """
+    Pre-flight check before starting AI analysis.
+    Checks if Ollama is running and tests a small API call for rate limits.
+    """
+    result = {
+        "ready": False,
+        "ollama_running": False,
+        "rate_limited": False,
+        "message": "Unknown error"
+    }
+    
+    try:
+        import ollama
+        
+        # Step 1: Check if Ollama is running by listing models
+        try:
+            models_response = ollama.list()
+            result["ollama_running"] = True
+        except Exception as e:
+            result["message"] = "Ollama is not running. Please start Ollama first."
+            return result
+        
+        # Step 2: Determine which model to test
+        if request.model_type == "cloud":
+            test_model = "deepseek-v3.1:671b-cloud"
+        else:
+            test_model = request.model_id or "qwen2.5:0.5b"
+        
+        # Step 3: Make a minimal test call to check rate limits (1 token, fastest possible)
+        try:
+            test_response = ollama.generate(
+                model=test_model,
+                prompt="1",
+                options={"num_predict": 1, "temperature": 0}
+            )
+            response_text = test_response.get('response', '').lower()
+            
+            # Check for rate limit message in response
+            if "usage limit" in response_text or "rate limit" in response_text:
+                result["rate_limited"] = True
+                result["message"] = "Rate limit reached. Please wait or upgrade to continue."
+                return result
+                
+            # All checks passed
+            result["ready"] = True
+            result["message"] = "AI is ready for analysis"
+            return result
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            if "usage limit" in error_str or "rate limit" in error_str or "weekly" in error_str:
+                result["rate_limited"] = True
+                result["message"] = "Rate limit reached. Please wait or upgrade to continue."
+            else:
+                result["message"] = f"AI test failed: {str(e)}"
+            return result
+            
+    except ImportError:
+        result["message"] = "Ollama package not installed."
+        return result
+
+
+@router.get("/ai/models")
+async def get_available_models():
+    """
+    Get list of installed Ollama models for offline mode.
+    Returns which supported models are available locally.
+    """
+    # Supported offline models we check for
+    SUPPORTED_MODELS = [
+        {"id": "qwen2.5:0.5b", "name": "Qwen 2.5 0.5B", "ram": "2GB", "gpu": "Not required"},
+        {"id": "qwen2.5:3b", "name": "Qwen 2.5 3B", "ram": "4GB", "gpu": "4GB VRAM"},
+        {"id": "llama3.2:8b", "name": "Llama 3.2 8B", "ram": "8GB", "gpu": "8GB VRAM"},
+        {"id": "deepseek-r1:14b", "name": "DeepSeek R1 14B", "ram": "16GB", "gpu": "12GB VRAM"},
+    ]
+    
+    try:
+        import ollama
+        
+        # Get installed models from Ollama
+        models_response = ollama.list()
+        model_list = models_response.models if hasattr(models_response, 'models') else models_response.get('models', [])
+        installed_names = [m.model if hasattr(m, 'model') else m.get('model', '') for m in model_list]
+        
+        # Check which supported models are installed
+        available = []
+        for model in SUPPORTED_MODELS:
+            # Check if model ID is in installed list (partial match for versioned models)
+            is_installed = any(model["id"] in name for name in installed_names)
+            available.append({
+                **model,
+                "installed": is_installed
+            })
+        
+        return {
+            "ollama_running": True,
+            "models": available,
+            "installed_count": sum(1 for m in available if m["installed"])
+        }
+        
+    except Exception as e:
+        # Ollama not running or not installed
+        return {
+            "ollama_running": False,
+            "models": [{"id": m["id"], "name": m["name"], "ram": m["ram"], "gpu": m["gpu"], "installed": False} for m in SUPPORTED_MODELS],
+            "installed_count": 0,
+            "error": str(e)
+        }
 
 
 @router.post("/ai/analyze", response_model=AIInsightsResponse)
@@ -128,9 +259,14 @@ async def analyze_chat(request: AnalysisRequest, db: Session = Depends(get_db)):
         for m in messages
     ]
     
-    # Run analysis
+    # Run analysis with model config
     try:
-        insights = ai_engine.analyze_full(message_dicts, report.stats)
+        insights = ai_engine.analyze_full(
+            message_dicts, 
+            report.stats,
+            model_type=request.model_type,
+            model_id=request.model_id
+        )
         
         # Save to report
         report.psych_analysis = insights
@@ -197,11 +333,16 @@ async def search_messages(
 
 
 @router.get("/ai/deep-insights/{upload_id}")
-async def get_deep_insights(upload_id: int, db: Session = Depends(get_db)):
+async def get_deep_insights(
+    upload_id: int, 
+    model_type: str = "cloud",
+    model_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     Get hierarchical timeline insights (weekly, monthly, yearly summaries).
     Uses the new HierarchicalSummarizer for temporal analysis.
-    Supports cancellation via TaskManager.
+    Supports model selection (cloud vs offline).
     """
     from app.services.hierarchical_summarizer import HierarchicalSummarizer
     from app.services.task_manager import task_manager, TaskCancelledException
@@ -228,8 +369,13 @@ async def get_deep_insights(upload_id: int, db: Session = Depends(get_db)):
     task_context = task_manager.start_task(upload_id)
     
     try:
-        # Run hierarchical summarization with cancellation support
-        summarizer = HierarchicalSummarizer(message_dicts, upload_id=upload_id)
+        # Run hierarchical summarization with model config
+        summarizer = HierarchicalSummarizer(
+            message_dicts, 
+            upload_id=upload_id,
+            model_type=model_type,
+            model_id=model_id
+        )
         summarizer.run_pipeline(
             cancellation_token=task_context.token,
             log_callback=lambda msg: task_manager.log(upload_id, msg)
