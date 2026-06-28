@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cloud, Monitor, Sparkles, Zap, Shield, Clock, ChevronDown, Cpu, HardDrive, AlertCircle, Download, Terminal } from "lucide-react";
+import { Cloud, Monitor, Sparkles, Zap, Shield, Clock, ChevronDown, Cpu, HardDrive, AlertCircle, Download, Terminal, Check } from "lucide-react";
 import { useOrbitStore } from "@/store/useOrbitStore";
 import api from "@/lib/api";
+
+interface CloudModel {
+    id: string;
+    name: string;
+    shortName: string;
+    size: string;
+    speed: string;
+    tag: string;
+    description: string;
+}
 
 interface OfflineModel {
     id: string;
@@ -17,6 +27,72 @@ interface OfflineModel {
     installed?: boolean;
 }
 
+const cloudModels: CloudModel[] = [
+    {
+        id: 'deepseek-v3.1:671b-cloud',
+        name: 'DeepSeek V3.1 671B',
+        shortName: 'DeepSeek V3.1',
+        size: '671B',
+        speed: '~45s',
+        tag: 'Best overall',
+        description: 'Strong reasoning for nuanced relationship and timeline analysis'
+    },
+    {
+        id: 'gpt-oss:120b-cloud',
+        name: 'GPT-OSS 120B',
+        shortName: 'GPT-OSS 120B',
+        size: '120B',
+        speed: '~35s',
+        tag: 'Balanced',
+        description: 'Reliable general analysis with a good speed-quality balance'
+    },
+    {
+        id: 'qwen3-coder:480b-cloud',
+        name: 'Qwen3 Coder 480B',
+        shortName: 'Qwen3 Coder',
+        size: '480B',
+        speed: '~50s',
+        tag: 'Precise',
+        description: 'Careful instruction following and structured JSON output'
+    },
+    {
+        id: 'qwen3-vl:235b-cloud',
+        name: 'Qwen3 VL 235B',
+        shortName: 'Qwen3 VL',
+        size: '235B',
+        speed: '~45s',
+        tag: 'Multimodal',
+        description: 'Strong general model with visual-language capability'
+    },
+    {
+        id: 'minimax-m2:cloud',
+        name: 'MiniMax M2',
+        shortName: 'MiniMax M2',
+        size: 'Cloud',
+        speed: '~40s',
+        tag: 'Expressive',
+        description: 'Good at natural language summaries and relationship context'
+    },
+    {
+        id: 'glm-4.6:cloud',
+        name: 'GLM 4.6',
+        shortName: 'GLM 4.6',
+        size: 'Cloud',
+        speed: '~40s',
+        tag: 'Stable',
+        description: 'Solid fallback for consistent chat analysis'
+    },
+    {
+        id: 'gpt-oss:20b-cloud',
+        name: 'GPT-OSS 20B',
+        shortName: 'GPT-OSS 20B',
+        size: '20B',
+        speed: '~25s',
+        tag: 'Fast',
+        description: 'Quick cloud option for smaller chats or faster previews'
+    },
+];
+
 // Full list of offline models with descriptions and speeds
 const offlineModelDetails: Record<string, { size: string; speed: string; description: string }> = {
     'qwen2.5:0.5b': { size: '0.5B', speed: '~8-15 min', description: 'Basic quality, may miss context' },
@@ -25,24 +101,18 @@ const offlineModelDetails: Record<string, { size: string; speed: string; descrip
     'deepseek-r1:14b': { size: '14B', speed: '~20-40 min', description: 'Best local quality, very slow' },
 };
 
-// RAM-based recommendations
-const getRecommendedModel = (ramGB: number): string => {
-    if (ramGB >= 16) return 'deepseek-r1:14b';
-    if (ramGB >= 8) return 'llama3.2:8b';
-    if (ramGB >= 4) return 'qwen2.5:3b';
-    return 'qwen2.5:0.5b';
-};
-
 export default function ModelSelector() {
     const {
         aiModelType,
         setAiModelType,
         startAiAnalysis,
+        selectedCloudModel,
+        setSelectedCloudModel,
         selectedOfflineModel,
-        setSelectedOfflineModel,
-        stats
+        setSelectedOfflineModel
     } = useOrbitStore();
 
+    const [showCloudDropdown, setShowCloudDropdown] = useState(false);
     const [showOfflineDropdown, setShowOfflineDropdown] = useState(false);
     const [availableModels, setAvailableModels] = useState<OfflineModel[]>([]);
     const [ollamaRunning, setOllamaRunning] = useState<boolean | null>(null); // null = checking
@@ -51,33 +121,21 @@ export default function ModelSelector() {
     const [installedCount, setInstalledCount] = useState(0);
     const [statusChecking, setStatusChecking] = useState(false);
 
-    // Check Ollama status on mount
-    useEffect(() => {
-        checkOllamaStatus();
-    }, []);
-
-    // Fetch available models when offline is selected
-    useEffect(() => {
-        if (aiModelType === 'offline') {
-            fetchAvailableModels();
-        }
-    }, [aiModelType]);
-
-    const checkOllamaStatus = async () => {
+    const checkOllamaStatus = useCallback(async () => {
         setStatusChecking(true);
         try {
-            const preflight = await api.preflight('cloud');
+            const preflight = await api.preflight('cloud', selectedCloudModel);
             setOllamaRunning(preflight.ollama_running);
             setRateLimited(preflight.rate_limited);
-        } catch (error) {
+        } catch {
             setOllamaRunning(false);
             setRateLimited(false);
         } finally {
             setStatusChecking(false);
         }
-    };
+    }, [selectedCloudModel]);
 
-    const fetchAvailableModels = async () => {
+    const fetchAvailableModels = useCallback(async () => {
         setLoadingModels(true);
         try {
             const response = await api.getAvailableModels();
@@ -110,16 +168,25 @@ export default function ModelSelector() {
         } finally {
             setLoadingModels(false);
         }
-    };
+    }, [selectedOfflineModel, setSelectedOfflineModel]);
+
+    // Check Ollama status on mount and when the selected cloud model changes.
+    useEffect(() => {
+        checkOllamaStatus();
+    }, [checkOllamaStatus]);
+
+    // Fetch available models when offline is selected
+    useEffect(() => {
+        if (aiModelType === 'offline') {
+            fetchAvailableModels();
+        }
+    }, [aiModelType, fetchAvailableModels]);
 
     // Find the selected model object
+    const selectedCloudModelDetails = cloudModels.find(m => m.id === selectedCloudModel) || cloudModels[0];
     const selectedModel = availableModels.find(m => m.id === selectedOfflineModel) || availableModels[0];
     const installedModels = availableModels.filter(m => m.installed);
     const notInstalledModels = availableModels.filter(m => !m.installed);
-
-    const estimatedTime = stats?.totalMessages
-        ? Math.round(30 + (stats.totalMessages / 1000) * 15)
-        : 45;
 
     // Can only start if cloud OR (offline with installed model)
     const canStartAnalysis = aiModelType === 'cloud' || (aiModelType === 'offline' && installedCount > 0 && selectedModel?.installed);
@@ -195,7 +262,10 @@ export default function ModelSelector() {
             <div className="grid grid-cols-2 gap-3 mb-3">
                 {/* Cloud Option */}
                 <motion.button
-                    onClick={() => setAiModelType('cloud')}
+                    onClick={() => {
+                        setAiModelType('cloud');
+                        setShowOfflineDropdown(false);
+                    }}
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     className={`relative px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer ${aiModelType === 'cloud'
@@ -226,7 +296,7 @@ export default function ModelSelector() {
                                 <div className="flex items-center gap-1.5 mb-0.5">
                                     <h3 className="text-sm font-semibold text-white leading-none">Cloud</h3>
                                 </div>
-                                <p className="text-[11px] text-zinc-400 font-medium leading-none">deepseek-v3.1</p>
+                                <p className="text-[11px] text-zinc-400 font-medium leading-none">{selectedCloudModelDetails.shortName}</p>
                             </div>
                         </div>
                         {/* Right: Details */}
@@ -245,7 +315,10 @@ export default function ModelSelector() {
 
                 {/* Offline Option */}
                 <motion.button
-                    onClick={() => setAiModelType('offline')}
+                    onClick={() => {
+                        setAiModelType('offline');
+                        setShowCloudDropdown(false);
+                    }}
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     className={`relative px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer ${aiModelType === 'offline'
@@ -288,6 +361,87 @@ export default function ModelSelector() {
                     </div>
                 </motion.button>
             </div>
+
+            {/* Cloud Model Selector (shown when cloud selected) */}
+            <AnimatePresence>
+                {aiModelType === 'cloud' && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-4"
+                    >
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">
+                            Online Model
+                        </p>
+
+                        <button
+                            onClick={() => setShowCloudDropdown(!showCloudDropdown)}
+                            className="w-full p-3 rounded-lg border border-white/10 bg-white/5 flex items-center justify-between gap-3 cursor-pointer hover:border-white/20 transition-colors"
+                        >
+                            <div className="flex items-center gap-3 min-w-0">
+                                <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                                <div className="text-left min-w-0">
+                                    <p className="text-sm text-white font-medium truncate">{selectedCloudModelDetails.name}</p>
+                                    <p className="text-[10px] text-zinc-500 truncate">{selectedCloudModelDetails.description}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-[10px] text-emerald-400 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                    {selectedCloudModelDetails.tag}
+                                </span>
+                                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${showCloudDropdown ? 'rotate-180' : ''}`} />
+                            </div>
+                        </button>
+
+                        <AnimatePresence>
+                            {showCloudDropdown && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -5 }}
+                                    className="mt-2 rounded-lg border border-white/10 bg-[#1a1a1f] overflow-hidden"
+                                >
+                                    {cloudModels.map((model) => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => {
+                                                setSelectedCloudModel(model.id);
+                                                setShowCloudDropdown(false);
+                                            }}
+                                            className={`w-full p-3 flex items-start gap-3 text-left hover:bg-white/5 transition-colors cursor-pointer border-b border-white/5 last:border-0 ${selectedCloudModel === model.id ? 'bg-purple-500/10' : ''
+                                                }`}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm text-white font-medium truncate">{model.name}</p>
+                                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 flex-shrink-0">
+                                                        {model.tag}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-zinc-500 mt-0.5">{model.description}</p>
+                                                <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-400">
+                                                    <span className="flex items-center gap-1">
+                                                        <Cloud className="w-3 h-3" /> {model.size}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" /> {model.speed}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {selectedCloudModel === model.id && (
+                                                <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 mt-1">
+                                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Offline Model Selector (shown when offline selected) */}
             <AnimatePresence>
@@ -465,7 +619,7 @@ export default function ModelSelector() {
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
                     <Zap className="w-3 h-3 text-amber-400" />
                     <span className="text-[10px] text-zinc-400">
-                        ~{aiModelType === 'offline' && selectedModel ? selectedModel.speed?.replace('~', '') : `${estimatedTime}s`}
+                        ~{aiModelType === 'offline' && selectedModel ? selectedModel.speed?.replace('~', '') : selectedCloudModelDetails.speed.replace('~', '')}
                     </span>
                 </div>
 

@@ -117,8 +117,11 @@ class TaskManager:
         with self._tasks_lock:
             if upload_id in self._tasks:
                 self._tasks[upload_id].add_log(message)
-        # Also print to console
-        print(message)
+        # Also print to console (handle Unicode on Windows cp1252)
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            print(message.encode('utf-8', errors='replace').decode('ascii', errors='replace'))
 
 
 class TaskCancelledException(Exception):

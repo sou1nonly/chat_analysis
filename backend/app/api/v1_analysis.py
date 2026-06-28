@@ -2,6 +2,8 @@
 Analysis API Routes - Handles AI-powered analysis features.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -10,6 +12,7 @@ from typing import Optional, Dict, Any
 from app.db.session import get_db
 from app.db.models import Upload, Message, Report
 from app.services.ai_engine import ai_engine
+from app.services.model_catalog import resolve_cloud_model
 from app.services.stats import compute_stats
 from app.services.parser import ParsedMessage
 
@@ -19,7 +22,7 @@ router = APIRouter(prefix="/api/v1", tags=["analysis"])
 class AnalysisRequest(BaseModel):
     upload_id: int
     model_type: str = "cloud"  # "cloud" or "offline"
-    model_id: Optional[str] = None  # e.g., "qwen2.5:3b" for offline
+    model_id: Optional[str] = None  # e.g., cloud model ID or "qwen2.5:3b" for offline
 
 
 class AIInsightsResponse(BaseModel):
@@ -89,6 +92,9 @@ class InitAIRequest(BaseModel):
 @router.post("/ai/init")
 async def init_ai(request: InitAIRequest = None):
     """Initialize the AI engine (load model into memory)."""
+    if request:
+        ai_engine.set_model(request.model_type, request.model_id)
+
     # If using cloud, no local initialization needed
     if request and request.model_type == "cloud":
         return {"status": "ready", "message": "Cloud AI ready"}
@@ -140,7 +146,7 @@ async def ai_preflight(request: PreflightRequest):
         
         # Step 2: Determine which model to test
         if request.model_type == "cloud":
-            test_model = "deepseek-v3.1:671b-cloud"
+            test_model = resolve_cloud_model(request.model_id)
         else:
             test_model = request.model_id or "qwen2.5:0.5b"
         
@@ -166,9 +172,9 @@ async def ai_preflight(request: PreflightRequest):
             
         except Exception as e:
             error_str = str(e).lower()
-            if "usage limit" in error_str or "rate limit" in error_str or "weekly" in error_str:
+            if any(term in error_str for term in ["usage limit", "rate limit", "weekly", "subscription", "403"]):
                 result["rate_limited"] = True
-                result["message"] = "Rate limit reached. Please wait or upgrade to continue."
+                result["message"] = "Rate limit or subscription required. Please wait or upgrade to continue."
             else:
                 result["message"] = f"AI test failed: {str(e)}"
             return result
@@ -232,6 +238,8 @@ async def analyze_chat(request: AnalysisRequest, db: Session = Depends(get_db)):
     Run full AI analysis on chat data.
     Returns insights for all 4 categories.
     """
+    ai_engine.set_model(request.model_type, request.model_id)
+
     # Ensure AI is ready
     if not ai_engine.is_ready():
         ai_engine.load_model()
@@ -259,9 +267,10 @@ async def analyze_chat(request: AnalysisRequest, db: Session = Depends(get_db)):
         for m in messages
     ]
     
-    # Run analysis with model config
+    # Run analysis with model config — offload to thread to avoid blocking the event loop
     try:
-        insights = ai_engine.analyze_full(
+        insights = await asyncio.to_thread(
+            ai_engine.analyze_full,
             message_dicts, 
             report.stats,
             model_type=request.model_type,
@@ -376,7 +385,9 @@ async def get_deep_insights(
             model_type=model_type,
             model_id=model_id
         )
-        summarizer.run_pipeline(
+        # Offload blocking pipeline to a thread so it doesn't freeze the event loop
+        await asyncio.to_thread(
+            summarizer.run_pipeline,
             cancellation_token=task_context.token,
             log_callback=lambda msg: task_manager.log(upload_id, msg)
         )

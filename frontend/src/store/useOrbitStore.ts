@@ -84,8 +84,10 @@ interface OrbitState {
     // Model Selection
     aiModelType: 'cloud' | 'offline';
     aiStarted: boolean;
+    selectedCloudModel: string; // model ID like 'deepseek-v3.1:671b-cloud'
     selectedOfflineModel: string; // model ID like 'qwen2.5:3b'
     setAiModelType: (type: 'cloud' | 'offline') => void;
+    setSelectedCloudModel: (modelId: string) => void;
     setSelectedOfflineModel: (modelId: string) => void;
     startAiAnalysis: () => void;
 
@@ -121,6 +123,7 @@ export const useOrbitStore = create<OrbitState>()(
             aiEta: 0,
             aiModelType: 'cloud',
             aiStarted: false,
+            selectedCloudModel: 'deepseek-v3.1:671b-cloud',
             selectedOfflineModel: 'qwen2.5:0.5b',
 
             searchResults: [],
@@ -157,6 +160,7 @@ export const useOrbitStore = create<OrbitState>()(
                 aiEta: eta
             }),
             setAiModelType: (type) => set({ aiModelType: type }),
+            setSelectedCloudModel: (modelId) => set({ selectedCloudModel: modelId }),
             setSelectedOfflineModel: (modelId) => set({ selectedOfflineModel: modelId }),
             startAiAnalysis: () => set({ aiStarted: true }),
 

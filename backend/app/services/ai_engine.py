@@ -18,6 +18,7 @@ except ImportError:
     print("[WARN] ollama package not installed.")
 
 from app.services.text_optimizer import TextOptimizer
+from app.services.model_catalog import DEFAULT_CLOUD_MODEL, resolve_cloud_model
 
 
 # IMPORTANT: Prompts require BALANCED analysis of BOTH participants
@@ -109,9 +110,9 @@ class AIEngine:
     """Ollama-based AI analysis engine with improved prompts."""
     
     _instance: Optional["AIEngine"] = None
-    _cloud_model: str = "deepseek-v3.1:671b-cloud"
+    _cloud_model: str = DEFAULT_CLOUD_MODEL
     _default_offline_model: str = "qwen2.5:0.5b"
-    _active_model: str = "deepseek-v3.1:671b-cloud"
+    _active_model: str = DEFAULT_CLOUD_MODEL
     _ready: bool = False
     
     def __new__(cls):
@@ -125,8 +126,8 @@ class AIEngine:
             self._active_model = model_id
             print(f"[AI] Using offline model: {model_id}")
         else:
-            self._active_model = self._cloud_model
-            print(f"[AI] Using cloud model: {self._cloud_model}")
+            self._active_model = resolve_cloud_model(model_id)
+            print(f"[AI] Using cloud model: {self._active_model}")
     
     def load_model(self, model_name: Optional[str] = None) -> bool:
         """Check if Ollama is running and model is available."""

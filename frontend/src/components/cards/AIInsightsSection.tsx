@@ -183,6 +183,7 @@ export default function AIInsightsSection() {
         aiProgress, aiStage, aiEta, setAiProgress,
         aiStarted,
         aiModelType,
+        selectedCloudModel,
         selectedOfflineModel,
         stats
     } = useOrbitStore();
@@ -255,7 +256,7 @@ export default function AIInsightsSection() {
                 // Stage 0: Pre-flight check
                 setAiStatus('analyzing');
                 setAiProgress(2, 'Checking AI availability...', calculateEta(messageCount, 2));
-                const modelId = aiModelType === 'offline' ? selectedOfflineModel : undefined;
+                const modelId = aiModelType === 'offline' ? selectedOfflineModel : selectedCloudModel;
 
                 const preflight = await api.preflight(aiModelType, modelId);
 
@@ -335,7 +336,7 @@ export default function AIInsightsSection() {
         };
 
         runUnifiedAnalysis();
-    }, [uploadId, stats, aiStarted]);
+    }, [uploadId, stats, aiStarted, aiModelType, selectedCloudModel, selectedOfflineModel]);
 
     const isLoading = aiStatus === 'preprocessing' || aiStatus === 'analyzing';
     const hasError = aiStatus === 'error';
@@ -394,8 +395,11 @@ export default function AIInsightsSection() {
                         {/* Error state */}
                         {hasError && !isLoading && (
                             <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900/80 rounded-2xl">
-                                <div className="text-center space-y-3">
+                                <div className="text-center space-y-3 px-6 max-w-md mx-auto">
                                     <p className="text-red-400 font-medium">Analysis failed</p>
+                                    <p className="text-sm text-zinc-400 leading-relaxed">
+                                        {aiStage || 'An unexpected error occurred during analysis.'}
+                                    </p>
                                     <button
                                         onClick={() => {
                                             setAiStatus('idle');

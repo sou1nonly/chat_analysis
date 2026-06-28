@@ -5,30 +5,33 @@ Compresses chat history into temporal summaries for efficient AI processing.
 50k messages → 52 weeks → 12 months → yearly summary → ~2-3k tokens
 """
 
-from typing import List, Dict, Any, Optional
-from collections import defaultdict
+from app.services.task_manager import TaskCancelledException
+import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass, asdict
-import json
+from typing import Any, Dict, List, Optional
 
 from app.services.preprocessing import (
-    preprocess_all_messages,
     extract_top_words,
-    get_week_id,
-    get_month_id,
-    get_year
+    preprocess_all_messages,
 )
+from app.services.model_catalog import DEFAULT_CLOUD_MODEL, resolve_cloud_model
 
 
 @dataclass
 class WeekBucket:
     """Weekly aggregated statistics."""
     week_id: str
-    message_count: int
+    message_count: int  # Personal conversation messages used for summarization
     avg_sentiment: float
     top_words: List[str]
     question_ratio: float
     participant_balance: float  # 0.5 = equal, >0.5 = P1 dominates
     participants: Dict[str, int]  # {name: count}
+    month_id: str = ""
+    source_message_count: int = 0
+    skipped_nonpersonal_count: int = 0
+    personal_ratio: float = 0.0
     narrative: str = ""  # AI-generated weekly summary
     
     def to_narrative(self, participant_names: List[str]) -> str:
@@ -36,6 +39,12 @@ class WeekBucket:
         p1 = participant_names[0] if participant_names else "Person 1"
         p2 = participant_names[1] if len(participant_names) > 1 else "Person 2"
         
+        if self.message_count == 0:
+            return "No personal conversation stood out this week; the visible messages were mostly pasted material, links, media, or short reactions."
+
+        if self.narrative:
+            return self.narrative
+
         # Sentiment description
         if self.avg_sentiment > 0.3:
             mood = "warm and positive"
@@ -83,6 +92,9 @@ class MonthSummary:
     key_topics: List[str]
     participant_balance: float
     narrative: str
+    source_messages: int = 0
+    skipped_nonpersonal: int = 0
+    personal_ratio: float = 0.0
     
     def to_narrative(self, participant_names: List[str]) -> str:
         """Generate natural language narrative."""
@@ -100,6 +112,9 @@ class YearSummary:
     evolution: str      # Relationship evolution description
     highlights: List[str]
     patterns: str
+    source_messages: int = 0
+    skipped_nonpersonal: int = 0
+    personal_ratio: float = 0.0
     
     def to_narrative(self) -> str:
         """Generate natural language narrative."""
@@ -125,13 +140,13 @@ class HierarchicalSummarizer:
         self._log_callback = None
         
         # Model configuration
-        self._cloud_model = "deepseek-v3.1:671b-cloud"
+        self._cloud_model = DEFAULT_CLOUD_MODEL
         if model_type == "offline" and model_id:
             self._active_model = model_id
             print(f"[SUMMARIZER] Using offline model: {model_id}")
         else:
-            self._active_model = self._cloud_model
-            print(f"[SUMMARIZER] Using cloud model: {self._cloud_model}")
+            self._active_model = resolve_cloud_model(model_id)
+            print(f"[SUMMARIZER] Using cloud model: {self._active_model}")
         
     def _log(self, message: str):
         """Log message and broadcast to subscribers."""
@@ -139,13 +154,211 @@ class HierarchicalSummarizer:
             # Callback handles printing, don't double-print
             self._log_callback(message)
         else:
-            # No callback, print directly
-            print(message)
+            # No callback, print directly (handle Unicode on Windows cp1252)
+            try:
+                print(message)
+            except UnicodeEncodeError:
+                print(message.encode('utf-8', errors='replace').decode('ascii', errors='replace'))
     
     def _check_cancelled(self):
         """Check if task was cancelled and raise exception if so."""
         if self._cancellation_token and self._cancellation_token.is_cancelled:
             raise TaskCancelledException(f"Task cancelled for upload {self.upload_id}")
+
+    def _score_personal_relevance(self, message: Dict[str, Any]) -> float:
+        """
+        Score whether a message is useful for relationship/personal timeline summaries.
+
+        The goal is not to delete academic or code-related chats entirely. Short
+        conversational lines like "did you finish the assignment?" can survive if
+        they carry personal context, while pasted homework, code blocks, logs, and
+        formal instructions are pushed out of summaries.
+        """
+        content = (message.get('content') or '').strip()
+        if not content:
+            return 0.0
+
+        classification = message.get('classification', 'statement')
+        if classification in {'media', 'link', 'reaction'}:
+            return 0.08
+
+        text_lower = content.lower()
+        words = re.findall(r"[a-zA-Z']+", text_lower)
+        word_count = len(words)
+        char_count = len(content)
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+        line_count = max(1, len(lines))
+
+        personal_patterns = [
+            r"\b(i|me|my|mine|you|your|yours|we|us|our|ours)\b",
+            r"\b(tu|tum|tune|tujhe|tera|teri|tere|mujhe|mujhko|mera|meri|mere|hum|ham|apna|apni|apne)\b",
+            r"\b(main|mai|mein|mene|maine|hamara|hamari|hamare|aap|aapka|aapki|aapke)\b",
+            r"\b(call|meet|come|go|home|sleep|ate|eat|food|dinner|lunch|breakfast|movie|walk|drive|trip|plan)\b",
+            r"\b(miss|love|like you|care|sorry|angry|sad|happy|hurt|proud|worried|tired|stress|anxious|excited)\b",
+            r"\b(mom|dad|family|friend|birthday|today|tomorrow|yesterday|tonight|morning|night)\b",
+            r"\b(yaad|pyaar|pyar|pasand|miss|mil|milega|milna|milu|milegi|milo|ghar|khana|sona|uth|uthna)\b",
+            r"\b(aaj|kal|parso|raat|subah|shaam|dopahar|abhi|baad|pehle|late|jaldi)\b",
+            r"\b(khana|kha|khaya|khayi|soya|soyi|soye|neend|tabiyat|bimar|bukhar|dard|thak|thak gaya|thak gayi)\b",
+            r"\b(padhai|exam|paper|class|college|school|office|kaam|stress|tension|mood|scene)\b",
+        ]
+        personal_hits = sum(1 for pattern in personal_patterns if re.search(pattern, text_lower))
+
+        chat_style_patterns = [
+            r"\b(haha|hehe|lol|lmao|omg|yaar|dude|bro|arre|arey|acha|accha|achha|haan|han|nahi|nhi)\b",
+            r"\b(kyu|kyun|kya|kaise|kab|kaha|kahan|matlab|sahi|theek|thik|chal|chalo|sun|suno|bata|batao)\b",
+            r"[!?]",
+            r"[\U0001F300-\U0001FAFF]",
+        ]
+        chat_style_hits = sum(1 for pattern in chat_style_patterns if re.search(pattern, content, re.IGNORECASE))
+
+        assignment_patterns = [
+            r"\b(assignment|homework|worksheet|question bank|syllabus|semester|practical|experiment|lab manual)\b",
+            r"\b(submit|submission|deadline|marks|rubric|instructions|requirements|objective|procedure)\b",
+            r"\b(answer the following|solve the following|write a program|write an essay|explain in detail)\b",
+            r"\b(abstract|introduction|conclusion|references|bibliography|case study|viva|module|unit)\b",
+            r"\b(define|derive|differentiate|calculate|discuss|elaborate|theory|algorithm|flowchart|output)\b",
+            r"\b(program to|source code|pseudo ?code|class diagram|er diagram|normalization|dbms|compiler)\b",
+            r"\b(unit|chapter|module)\s*[-:]?\s*\d+\b",
+            r"\b(q\.?\s*\d+|question\s*\d+|ans\.?|answer:|example\s*\d+)\b",
+        ]
+        assignment_hits = sum(1 for pattern in assignment_patterns if re.search(pattern, text_lower))
+
+        code_patterns = [
+            r"```",
+            r"\b(def|class|return|import|from|function|const|let|var|public|private|static|void|main)\b",
+            r"\b(console\.log|system\.out\.println|printf|scanf|cout|cin|select \*|insert into|create table)\b",
+            r"#include|</?[a-z][^>]*>|[{};]{2,}",
+        ]
+        code_hits = sum(1 for pattern in code_patterns if re.search(pattern, content, re.IGNORECASE))
+
+        code_line_count = 0
+        list_line_count = 0
+        for line in lines:
+            if re.search(
+                r"^\s*(def |class |import |from |#include|public |private |function |const |let |var |"
+                r"return\b|if\s*\(|for\s*\(|while\s*\()",
+                line,
+                re.IGNORECASE,
+            ):
+                code_line_count += 1
+            elif re.search(r"[{};=<>]{2,}", line):
+                code_line_count += 1
+
+            if re.search(r"^\s*(\d+[\).:]|[a-zA-Z][\).:]|[-*])\s+", line):
+                list_line_count += 1
+
+        code_density = code_line_count / line_count
+        list_density = list_line_count / line_count
+
+        score = 0.35
+        if char_count <= 220:
+            score += 0.12
+        if char_count <= 500 and line_count <= 4:
+            score += 0.08
+        if personal_hits:
+            score += min(0.34, 0.12 + personal_hits * 0.055)
+        if chat_style_hits:
+            score += min(0.16, chat_style_hits * 0.04)
+        if classification == 'question' and personal_hits:
+            score += 0.06
+
+        score -= min(0.45, assignment_hits * 0.12)
+        score -= min(0.55, code_hits * 0.16)
+        if code_density >= 0.25:
+            score -= 0.42
+        if list_density >= 0.35 and personal_hits == 0:
+            score -= 0.25
+        if line_count >= 8 and assignment_hits >= 2:
+            score -= 0.24
+        if char_count > 700 and personal_hits < 2:
+            score -= 0.24
+        if char_count > 1600:
+            score -= 0.22
+        if word_count > 140 and personal_hits < 2:
+            score -= 0.18
+
+        return max(0.0, min(1.0, score))
+
+    def _is_personal_conversation_message(self, message: Dict[str, Any]) -> bool:
+        """Return True when a message is likely useful for personal summaries."""
+        content = (message.get('content') or '').strip()
+        if len(content) < 8:
+            return False
+        if message.get('classification') not in {'statement', 'question'}:
+            return False
+        score = message.get('personal_score')
+        if score is None:
+            score = self._score_personal_relevance(message)
+        return score >= 0.42
+
+    def _filter_personal_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Keep messages that are likely personal conversation, annotating scores."""
+        personal = []
+        for msg in messages:
+            score = self._score_personal_relevance(msg)
+            msg['personal_score'] = score
+            if self._is_personal_conversation_message(msg):
+                personal.append(msg)
+        return personal
+
+    def _sample_personal_messages(self, messages: List[Dict[str, Any]], sample_size: int) -> List[Dict[str, Any]]:
+        """
+        Sample personal messages across the whole period while preserving spikes.
+
+        Even sampling keeps old, middle, and new conversations represented. A
+        small importance slice keeps emotional, high-signal, or question messages
+        from being skipped just because they are rare.
+        """
+        if len(messages) <= sample_size:
+            return messages
+
+        indexed = list(enumerate(messages))
+        even_count = max(1, int(sample_size * 0.72))
+        important_count = max(0, sample_size - even_count)
+
+        step = len(indexed) / even_count
+        selected_indexes = {
+            indexed[min(len(indexed) - 1, int(round(i * step)))][0]
+            for i in range(even_count)
+        }
+
+        ranked = sorted(
+            indexed,
+            key=lambda item: (
+                item[1].get('personal_score', 0)
+                + abs(item[1].get('sentiment', 0)) * 0.2
+                + (0.08 if item[1].get('classification') == 'question' else 0)
+            ),
+            reverse=True
+        )
+        for idx, _ in ranked[:important_count]:
+            selected_indexes.add(idx)
+
+        return [msg for idx, msg in indexed if idx in selected_indexes][:sample_size]
+
+    def _dominant_month_id(self, messages: List[Dict[str, Any]]) -> str:
+        """Choose the actual calendar month represented by a group of messages."""
+        month_counts = Counter(
+            m.get('month_id')
+            for m in messages
+            if m.get('month_id') and m.get('month_id') != 'unknown'
+        )
+        if month_counts:
+            return month_counts.most_common(1)[0][0]
+        return "unknown"
+
+    def _format_messages_for_prompt(self, messages: List[Dict[str, Any]], max_chars: int = 140) -> str:
+        """Format sampled messages compactly for LLM prompts."""
+        lines = []
+        for msg in messages:
+            sender = msg.get('sender', 'Unknown')
+            timestamp = str(msg.get('timestamp', ''))[:10]
+            content = re.sub(r"\s+", " ", msg.get('content', '')).strip()
+            if len(content) > max_chars:
+                content = content[:max_chars].rstrip() + "..."
+            prefix = f"{timestamp} " if timestamp else ""
+            lines.append(f"{prefix}{sender}: {content}")
+        return "\n".join(lines)
     
     def run_pipeline(self, cancellation_token=None, log_callback=None) -> Dict[str, Any]:
         """Run the full hierarchical AI summarization pipeline."""
@@ -205,7 +418,10 @@ class HierarchicalSummarizer:
         total_time = time.time() - start_time
         self._log("\n" + "=" * 60)
         self._log(f"[OK] Pipeline complete in {total_time:.1f}s ({total_time/60:.1f} min)")
-        self._log(f"     {len(self.weekly_buckets)} weeks → {len(self.monthly_summaries)} months → {len(self.yearly_summaries)} years")
+        self._log(
+            f"     {len(self.weekly_buckets)} weeks -> "
+            f"{len(self.monthly_summaries)} months -> {len(self.yearly_summaries)} years"
+        )
         self._log("=" * 60)
         
         return {
@@ -232,22 +448,26 @@ class HierarchicalSummarizer:
             self._check_cancelled()
             
             msgs = weeks[week_id]
+            personal_msgs = self._filter_personal_messages(msgs)
+            source_message_count = len(msgs)
+            skipped_nonpersonal_count = source_message_count - len(personal_msgs)
+            month_id = self._dominant_month_id(personal_msgs or msgs)
             
             # Progress indicator
             if (idx + 1) % 10 == 0 or idx == 0:
                 self._log(f"      Week {idx + 1}/{total_weeks}: {week_id}")
             
             # Calculate stats
-            sentiments = [m['sentiment'] for m in msgs if m.get('sentiment', 0) != 0]
+            sentiments = [m['sentiment'] for m in personal_msgs if m.get('sentiment', 0) != 0]
             avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0.0
             
             # Question ratio
-            questions = sum(1 for m in msgs if m.get('classification') == 'question')
-            question_ratio = questions / len(msgs) if msgs else 0
+            questions = sum(1 for m in personal_msgs if m.get('classification') == 'question')
+            question_ratio = questions / len(personal_msgs) if personal_msgs else 0
             
             # Participant balance
             participant_counts = defaultdict(int)
-            for m in msgs:
+            for m in personal_msgs:
                 participant_counts[m.get('sender', 'Unknown')] += 1
             
             if len(self.participants) >= 2 and self.participants[0] in participant_counts:
@@ -258,59 +478,67 @@ class HierarchicalSummarizer:
                 balance = 0.5
             
             # Top words
-            texts = [m.get('content', '') for m in msgs]
+            texts = [m.get('content', '') for m in personal_msgs]
             top_words = extract_top_words(texts, n=10)
             
-            # Generate AI narrative for this week (50 msg sample)
-            narrative = self._generate_ai_weekly_summary(week_id, msgs)
+            # Generate AI narrative from personal conversation samples only
+            narrative = self._generate_ai_weekly_summary(
+                week_id,
+                personal_msgs,
+                source_message_count=source_message_count,
+                skipped_nonpersonal_count=skipped_nonpersonal_count
+            )
             
             bucket = WeekBucket(
                 week_id=week_id,
-                message_count=len(msgs),
+                message_count=len(personal_msgs),
                 avg_sentiment=avg_sentiment,
                 top_words=top_words,
                 question_ratio=question_ratio,
                 participant_balance=balance,
                 participants=dict(participant_counts),
+                month_id=month_id,
+                source_message_count=source_message_count,
+                skipped_nonpersonal_count=skipped_nonpersonal_count,
+                personal_ratio=(len(personal_msgs) / source_message_count) if source_message_count else 0.0,
                 narrative=narrative
             )
             
             self.weekly_buckets.append(bucket)
     
-    def _generate_ai_weekly_summary(self, week_id: str, messages: List[Dict]) -> str:
-        """Generate AI summary for a week using 50 message samples."""
+    def _generate_ai_weekly_summary(
+        self,
+        week_id: str,
+        messages: List[Dict],
+        source_message_count: int = 0,
+        skipped_nonpersonal_count: int = 0
+    ) -> str:
+        """Generate AI summary for a week using personal conversation samples."""
         try:
             import ollama
             
-            # Sample up to 75 meaningful messages
-            meaningful_msgs = [
-                m for m in messages 
-                if m.get('classification') in ['statement', 'question'] 
-                and len(m.get('content', '')) > 10
-            ]
-            
-            sample_size = min(75, len(meaningful_msgs))
+            sample_size = min(75, len(messages))
             if sample_size < 3:
-                return f"A quiet week with {len(messages)} messages."
-            
-            # Even distribution sampling
-            step = max(1, len(meaningful_msgs) // sample_size)
-            sampled = meaningful_msgs[::step][:sample_size]
+                return ""
+
+            sampled = self._sample_personal_messages(messages, sample_size)
             
             p1 = self.participants[0] if self.participants else "Person 1"
             p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
             
-            conversation_sample = "\n".join([
-                f"{m.get('sender', 'Unknown')}: {m.get('content', '')[:120]}"
-                for m in sampled
-            ])
+            conversation_sample = self._format_messages_for_prompt(sampled, max_chars=140)
             
-            prompt = f"""Summarize this week's conversation between {p1} and {p2} in 1-2 sentences. Focus on specific topics/events.
+            prompt = f"""Summarize the PERSONAL conversation between {p1} and {p2} during week {week_id}.
 
-CONVERSATION SAMPLES:
+The chat may mix English, Hinglish, and Hindi written in English letters. Understand common Roman Hindi/Hinglish naturally.
+You must ignore copied assignment text, homework/problem statements, code, logs, boilerplate, links, and generic pasted material.
+Mention school/work/code only if it affected their personal dynamic, plans, stress, support, or emotional tone. Do not summarize the content of assignments or code.
+Source messages this week: {source_message_count}. Personal messages used: {len(messages)}. Non-personal/pasted messages filtered: {skipped_nonpersonal_count}.
+
+PERSONAL CONVERSATION SAMPLES:
 {conversation_sample}
 
-Write a brief, specific summary (1-2 sentences):"""
+Write 1-2 specific sentences about their personal interaction, emotional tone, plans, conflicts, care, routines, or life events:"""
 
             response = ollama.generate(
                 model=self._active_model,
@@ -322,10 +550,10 @@ Write a brief, specific summary (1-2 sentences):"""
             if result and len(result) > 15:
                 return result
             else:
-                return f"Week with {len(messages)} messages discussing various topics."
+                return ""
                 
-        except Exception as e:
-            return f"Week with {len(messages)} messages."
+        except Exception:
+            return ""
     
     def _create_weekly_buckets(self):
         """Legacy method - redirects to AI version."""
@@ -343,22 +571,19 @@ Write a brief, specific summary (1-2 sentences):"""
                 month_messages[month_id].append(msg)
         
         for bucket in self.weekly_buckets:
-            # Extract YYYY-MM from week_id (e.g., "2024-W03" -> "2024-01")
-            try:
-                year = int(bucket.week_id.split('-W')[0])
-                week_num = int(bucket.week_id.split('-W')[1])
-                # Approximate month from week number
-                month_num = min(12, max(1, (week_num - 1) // 4 + 1))
-                month_id = f"{year}-{month_num:02d}"
+            month_id = bucket.month_id
+            if month_id and month_id != "unknown":
                 months[month_id].append(bucket)
-            except (ValueError, IndexError):
-                continue
         
         for month_id in sorted(months.keys()):
             buckets = months[month_id]
             
             total_msgs = sum(b.message_count for b in buckets)
-            sentiments = [b.avg_sentiment for b in buckets]
+            source_messages = sum(b.source_message_count for b in buckets)
+            skipped_nonpersonal = sum(b.skipped_nonpersonal_count for b in buckets)
+            active_buckets = [b for b in buckets if b.message_count > 0]
+            sentiment_buckets = active_buckets or buckets
+            sentiments = [b.avg_sentiment for b in sentiment_buckets]
             avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
             
             # Sentiment trend
@@ -375,7 +600,7 @@ Write a brief, specific summary (1-2 sentences):"""
                 trend = "stable"
             
             # Activity level
-            avg_weekly_msgs = total_msgs / len(buckets) if buckets else 0
+            avg_weekly_msgs = total_msgs / len(active_buckets) if active_buckets else 0
             if avg_weekly_msgs > 150:
                 activity = "high"
             elif avg_weekly_msgs > 70:
@@ -411,7 +636,10 @@ Write a brief, specific summary (1-2 sentences):"""
                 activity_level=activity,
                 key_topics=key_topics,
                 participant_balance=avg_balance,
-                narrative=narrative
+                narrative=narrative,
+                source_messages=source_messages,
+                skipped_nonpersonal=skipped_nonpersonal,
+                personal_ratio=(total_msgs / source_messages) if source_messages else 0.0
             )
             
             self.monthly_summaries.append(summary)
@@ -428,33 +656,28 @@ Write a brief, specific summary (1-2 sentences):"""
         try:
             import ollama
             
-            # Sample up to 30 meaningful messages (not media/reactions)
-            meaningful_msgs = [
-                m for m in messages 
-                if m.get('classification') in ['statement', 'question'] 
-                and len(m.get('content', '')) > 10
-            ]
+            personal_msgs = self._filter_personal_messages(messages)
             
             # Take evenly distributed samples
-            sample_size = min(30, len(meaningful_msgs))
+            sample_size = min(30, len(personal_msgs))
             if sample_size == 0:
                 return self._generate_fallback_narrative(month_id, sentiment, trend, activity)
             
-            step = max(1, len(meaningful_msgs) // sample_size)
-            sampled = meaningful_msgs[::step][:sample_size]
+            sampled = self._sample_personal_messages(personal_msgs, sample_size)
             
             # Build context
             p1 = self.participants[0] if self.participants else "Person 1"
             p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
             
-            conversation_sample = "\n".join([
-                f"{m.get('sender', 'Unknown')}: {m.get('content', '')[:150]}"
-                for m in sampled
-            ])
+            conversation_sample = self._format_messages_for_prompt(sampled, max_chars=150)
             
-            prompt = f"""Based on these conversation samples between {p1} and {p2}, write a 1-2 sentence summary of what they talked about this month. Focus on specific topics, events, or themes - not generic descriptions.
+            prompt = f"""Based on these PERSONAL conversation samples between {p1} and {p2}, write a 1-2 sentence summary of what they talked about this month.
 
-CONVERSATION SAMPLES:
+The chat may mix English, Hinglish, and Hindi written in English letters. Understand common Roman Hindi/Hinglish naturally.
+Ignore pasted assignments, homework/problem statements, code, logs, boilerplate, and generic study material. Mention school/work only when it affected mood, support, plans, stress, or their personal dynamic.
+Focus on specific personal topics, events, routines, feelings, conflicts, care, or plans - not generic descriptions.
+
+PERSONAL CONVERSATION SAMPLES:
 {conversation_sample}
 
 Write a natural, specific summary (1-2 sentences only). 
@@ -503,14 +726,9 @@ Summary:"""
         months: Dict[str, List[WeekBucket]] = defaultdict(list)
         
         for bucket in self.weekly_buckets:
-            try:
-                year = int(bucket.week_id.split('-W')[0])
-                week_num = int(bucket.week_id.split('-W')[1])
-                month_num = min(12, max(1, (week_num - 1) // 4 + 1))
-                month_id = f"{year}-{month_num:02d}"
+            month_id = bucket.month_id
+            if month_id and month_id != "unknown":
                 months[month_id].append(bucket)
-            except (ValueError, IndexError):
-                continue
         
         sorted_months = sorted(months.keys())
         self._log(f"      Processing {len(sorted_months)} months...")
@@ -523,7 +741,11 @@ Summary:"""
                 self._log(f"      Month {idx + 1}/{len(sorted_months)}: {month_id}")
             
             total_msgs = sum(b.message_count for b in buckets)
-            sentiments = [b.avg_sentiment for b in buckets]
+            source_messages = sum(b.source_message_count for b in buckets)
+            skipped_nonpersonal = sum(b.skipped_nonpersonal_count for b in buckets)
+            active_buckets = [b for b in buckets if b.message_count > 0]
+            sentiment_buckets = active_buckets or buckets
+            sentiments = [b.avg_sentiment for b in sentiment_buckets]
             avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
             
             # Sentiment trend
@@ -540,7 +762,7 @@ Summary:"""
                 trend = "stable"
             
             # Activity level
-            avg_weekly_msgs = total_msgs / len(buckets) if buckets else 0
+            avg_weekly_msgs = total_msgs / len(active_buckets) if active_buckets else 0
             if avg_weekly_msgs > 150:
                 activity = "high"
             elif avg_weekly_msgs > 70:
@@ -558,8 +780,14 @@ Summary:"""
             total_balance = sum(b.participant_balance * b.message_count for b in buckets)
             avg_balance = total_balance / total_msgs if total_msgs > 0 else 0.5
             
-            # Generate monthly narrative FROM WEEKLY SUMMARIES (hierarchical!)
-            narrative = self._synthesize_monthly_from_weekly(month_id, buckets, avg_sentiment, activity)
+            # Generate monthly narrative from personal weekly summaries.
+            if total_msgs == 0 and source_messages > 0:
+                narrative = (
+                    f"No clear personal conversation stood out in {month_id}; "
+                    "the month was mostly pasted academic/code material, links, media, or short reactions."
+                )
+            else:
+                narrative = self._synthesize_monthly_from_weekly(month_id, buckets, avg_sentiment, activity)
             
             summary = MonthSummary(
                 month=month_id,
@@ -570,7 +798,10 @@ Summary:"""
                 activity_level=activity,
                 key_topics=key_topics,
                 participant_balance=avg_balance,
-                narrative=narrative
+                narrative=narrative,
+                source_messages=source_messages,
+                skipped_nonpersonal=skipped_nonpersonal,
+                personal_ratio=(total_msgs / source_messages) if source_messages else 0.0
             )
             
             self.monthly_summaries.append(summary)
@@ -598,12 +829,15 @@ Summary:"""
             p1 = self.participants[0] if self.participants else "Person 1"
             p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
             
-            prompt = f"""Based on these weekly summaries, write a 2-3 sentence monthly summary for {p1} and {p2}.
+            prompt = f"""Based on these personal weekly summaries, write a 2-3 sentence monthly summary for {p1} and {p2}.
+
+The original chat may mix English, Hinglish, and Hindi written in English letters. Preserve the meaning of casual Hinglish naturally.
+Do not turn filtered assignment/code/study material into the topic. Mention academics/work only if it shaped their personal interaction, support, plans, stress, or mood.
 
 WEEKLY SUMMARIES:
 {weekly_summaries}
 
-Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:"""
+Write a cohesive monthly narrative (2-3 sentences) that captures how their personal connection felt over time:"""
 
             response = ollama.generate(
                 model=self._active_model,
@@ -640,7 +874,11 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
             self._log(f"      Year {year}: {len(months)} months")
             
             total_msgs = sum(m.total_messages for m in months)
-            sentiments = [m.avg_sentiment for m in months]
+            source_messages = sum(m.source_messages for m in months)
+            skipped_nonpersonal = sum(m.skipped_nonpersonal for m in months)
+            active_months = [m for m in months if m.total_messages > 0]
+            sentiment_months = active_months or months
+            sentiments = [m.avg_sentiment for m in sentiment_months]
             avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
             
             # Sentiment arc
@@ -654,21 +892,23 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
                 else:
                     arc = "The connection stayed consistent throughout"
             else:
-                arc = "A period of steady connection"
+                arc = "A period with limited personal conversation"
             
             # Highlights
             highlights = []
-            high_months = [m for m in months if m.activity_level == "high"]
+            high_months = [m for m in active_months if m.activity_level == "high"]
             if high_months:
                 highlights.append(f"Most active period was around {high_months[0].month}")
             
-            improving_months = [m for m in months if m.sentiment_trend == "improving"]
+            improving_months = [m for m in active_months if m.sentiment_trend == "improving"]
             if improving_months:
                 highlights.append(f"Things were looking up in {improving_months[0].month}")
             
             # Patterns
-            high_activity_count = sum(1 for m in months if m.activity_level == "high")
-            if high_activity_count > len(months) // 2:
+            high_activity_count = sum(1 for m in active_months if m.activity_level == "high")
+            if total_msgs == 0 and source_messages > 0:
+                patterns = "Most visible messages were non-personal material, so there was little relationship context to summarize."
+            elif high_activity_count > len(active_months) // 2:
                 patterns = "They stayed in regular touch throughout."
             elif high_activity_count > 0:
                 patterns = "Communication varied in intensity."
@@ -686,7 +926,10 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
                 sentiment_arc=arc,
                 evolution=evolution,
                 highlights=highlights,
-                patterns=patterns
+                patterns=patterns,
+                source_messages=source_messages,
+                skipped_nonpersonal=skipped_nonpersonal,
+                personal_ratio=(total_msgs / source_messages) if source_messages else 0.0
             )
             
             self.yearly_summaries.append(yearly)
@@ -714,7 +957,10 @@ Write a cohesive monthly narrative (2-3 sentences) that captures the key themes:
             p1 = self.participants[0] if self.participants else "Person 1"
             p2 = self.participants[1] if len(self.participants) > 1 else "Person 2"
             
-            prompt = f"""Based on these monthly summaries, write a comprehensive 3-4 sentence yearly summary for {p1} and {p2} in {year}. Capture the key themes, events, and how their relationship evolved.
+            prompt = f"""Based on these monthly personal summaries, write a comprehensive 3-4 sentence yearly summary for {p1} and {p2} in {year}.
+
+The original chat may mix English, Hinglish, and Hindi written in English letters. Preserve the meaning of casual Hinglish naturally.
+Capture key personal themes, events, emotional shifts, routines, support, distance/closeness, and how their relationship evolved. Do not summarize pasted assignments, code, or study material as relationship topics.
 
 MONTHLY SUMMARIES:
 {monthly_texts}
@@ -801,13 +1047,15 @@ Write a rich yearly narrative (3-4 sentences):"""
         
         lines.append("")
         
-        # Recent messages sample
-        if include_recent_messages > 0 and self.raw_messages:
+        # Recent personal messages sample
+        if include_recent_messages > 0 and self.preprocessed:
             lines.append("=== RECENT CONVERSATION SAMPLE ===")
-            recent = self.raw_messages[-include_recent_messages:]
+            recent = self._filter_personal_messages(self.preprocessed)[-include_recent_messages:]
+            if not recent:
+                recent = self.preprocessed[-include_recent_messages:]
             for msg in recent:
                 sender = msg.get('sender', 'Unknown')
-                content = msg.get('content', '')[:100]  # Truncate long messages
+                content = re.sub(r"\s+", " ", msg.get('content', '')).strip()[:120]
                 lines.append(f"{sender}: {content}")
         
         context = "\n".join(lines)
@@ -831,6 +1079,9 @@ Write a rich yearly narrative (3-4 sentences):"""
                 {
                     "year": y.year,
                     "messages": y.total_messages,
+                    "source_messages": y.source_messages,
+                    "filtered_messages": y.skipped_nonpersonal,
+                    "personal_ratio": y.personal_ratio,
                     "sentiment": y.avg_sentiment,
                     "evolution": y.evolution,
                     "patterns": y.patterns,
@@ -842,6 +1093,9 @@ Write a rich yearly narrative (3-4 sentences):"""
                 {
                     "month": m.month,
                     "messages": m.total_messages,
+                    "source_messages": m.source_messages,
+                    "filtered_messages": m.skipped_nonpersonal,
+                    "personal_ratio": m.personal_ratio,
                     "sentiment": m.avg_sentiment,
                     "trend": m.sentiment_trend,
                     "activity": m.activity_level,
@@ -854,6 +1108,9 @@ Write a rich yearly narrative (3-4 sentences):"""
                 {
                     "week": w.week_id,
                     "messages": w.message_count,
+                    "source_messages": w.source_message_count,
+                    "filtered_messages": w.skipped_nonpersonal_count,
+                    "personal_ratio": w.personal_ratio,
                     "sentiment": w.avg_sentiment,
                     "topics": w.top_words[:5],
                     "narrative": w.to_narrative(self.participants)
