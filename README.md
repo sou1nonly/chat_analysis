@@ -1,5 +1,4 @@
 <h1 align="center">Orbit</h1>
-<p align="center"><strong>The Relationship Zine</strong></p>
 
 <p align="center">
   <em>Turn raw chat exports into beautiful, private, AI-powered relationship insights.</em>
